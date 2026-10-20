@@ -2,6 +2,13 @@
 # Guarded deploy. Do not run until the Step 1B change set is explicitly approved.
 set -euo pipefail
 
+if [[ "${QUANTIC_ALLOW_AWS_DEPLOY:-}" != "yes" ]]; then
+  echo "ERROR: Cost-first strategy blocks AWS deploy."
+  echo "CDK code is preserved for later. Refusing to provision billable resources."
+  echo "A later paid-infra approval must set QUANTIC_ALLOW_AWS_DEPLOY=yes."
+  exit 1
+fi
+
 AWS_PROFILE="${AWS_PROFILE:-AEA-Sandbox-PowerUser}"
 AWS_REGION="${AWS_REGION:-us-east-2}"
 EXPECTED_ACCOUNT="${EXPECTED_ACCOUNT:-287238357427}"

@@ -14,6 +14,16 @@ export interface DeployTarget {
   stackName: string;
 }
 
+export function assertCostFirstDeployAllowed(
+  env: Record<string, string | undefined> = process.env,
+): void {
+  if (env.QUANTIC_ALLOW_AWS_DEPLOY !== 'yes') {
+    throw new DeployTargetError(
+      'Cost-first strategy blocks AWS deploy. Set QUANTIC_ALLOW_AWS_DEPLOY=yes only after explicit paid-infra approval.',
+    );
+  }
+}
+
 export function assertSafeDeployTarget(target: DeployTarget): void {
   if (target.project !== quanticConfig.project) {
     throw new DeployTargetError(

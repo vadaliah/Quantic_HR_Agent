@@ -12,7 +12,7 @@ npm run build
 npm run synth
 ```
 
-`scripts/synth-infra.sh` is the same offline synth. `scripts/validate-aws-env.sh` is a read-only identity check. `scripts/predeploy-check.sh` runs local tests, synth, identity, AZ IDs, and a stack/runtime inventory. `scripts/deploy-sandbox.sh` and the database scripts stay gated: they refuse Café Fausse and AEA stack names, prove `use2-az1`/`use2-az2`, print the stack, database, and secret path, and deploy only after you type the stack name and `deploy`.
+Cost-first: `scripts/deploy-sandbox.sh` exits unless `QUANTIC_ALLOW_AWS_DEPLOY=yes`. Synth, tests, and predeploy checks stay allowed. Do not provision NAT, Aurora, or AgentCore.
 
 ## What synth creates
 

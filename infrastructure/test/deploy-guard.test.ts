@@ -1,6 +1,7 @@
 import { quanticConfig } from '../lib/config';
 import {
   assertAgentCoreAvailabilityZones,
+  assertCostFirstDeployAllowed,
   assertSafeDeployTarget,
   DeployTargetError,
 } from '../lib/deploy-guard';
@@ -12,6 +13,11 @@ describe('deploy target guard', () => {
     region: quanticConfig.region,
     stackName: quanticConfig.stackName,
   };
+
+  test('blocks AWS deploy until paid-infra approval', () => {
+    expect(() => assertCostFirstDeployAllowed({})).toThrow(DeployTargetError);
+    expect(() => assertCostFirstDeployAllowed({ QUANTIC_ALLOW_AWS_DEPLOY: 'yes' })).not.toThrow();
+  });
 
   test('accepts the Quantic stack in the Step 0 account and region', () => {
     expect(() => assertSafeDeployTarget(allowed)).not.toThrow();
