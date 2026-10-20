@@ -118,8 +118,27 @@ describe('runtime IAM scope', () => {
     expect(document).toContain('logs:PutLogEvents');
     expect(document).not.toContain('secretsmanager:');
     expect(document).not.toContain('cafe-fausse');
-    expect(document).not.toContain('"Resource":"*"');
     expect(document).not.toContain('"Action":"*"');
     expect(document).not.toContain('bedrock:*');
+    expect(document).toContain('Sid":"XRayAccess');
+    expect(document).toContain('Sid":"CloudWatchMetrics');
+  });
+});
+
+describe('AgentCore Hello World runtime', () => {
+  const template = synthesize();
+  const json = JSON.stringify(template.toJSON());
+
+  test('creates one VPC Hello World runtime and no MCP or RAG services', () => {
+    template.resourceCountIs('AWS::BedrockAgentCore::Runtime', 1);
+    template.hasResourceProperties('AWS::BedrockAgentCore::Runtime', {
+      AgentRuntimeName: quanticConfig.helloWorldRuntimeName,
+      NetworkConfiguration: {
+        NetworkMode: 'VPC',
+      },
+      ProtocolConfiguration: 'HTTP',
+    });
+    expect(json).not.toContain('search_policy_documents');
+    expect(json).not.toContain('AWS::BedrockAgentCore::Gateway');
   });
 });

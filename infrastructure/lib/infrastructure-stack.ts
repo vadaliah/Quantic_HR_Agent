@@ -6,6 +6,7 @@ import { quanticConfig } from './config';
 import { AgentRuntimeRole } from './constructs/agent-runtime-role';
 import { DatabaseConstruct } from './constructs/database';
 import { DatabaseAccessConstruct } from './constructs/database-access';
+import { HelloWorldRuntime } from './constructs/hello-world-runtime';
 import { NetworkConstruct } from './constructs/network';
 
 export class QuanticHrAgentStack extends cdk.Stack {
@@ -26,6 +27,11 @@ export class QuanticHrAgentStack extends cdk.Stack {
     const runtimeRole = new AgentRuntimeRole(this, 'AgentRuntime', {
       cluster: database.cluster,
     });
+    const helloWorld = new HelloWorldRuntime(this, 'HelloWorld', {
+      vpc: network.vpc,
+      securityGroup: network.runtimeSecurityGroup,
+      executionRole: runtimeRole.role,
+    });
 
     database.cluster.connections.allowDefaultPortFrom(
       network.runtimeSecurityGroup,
@@ -42,13 +48,16 @@ export class QuanticHrAgentStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'RuntimeSubnetIds', {
       value: runtimeSubnets.subnetIds.join(','),
-      description: 'Private subnets for a later AgentCore networkMode=VPC configuration.',
+      description: 'Private subnets used by the AgentCore Hello World runtime.',
     });
     new cdk.CfnOutput(this, 'RuntimeSecurityGroupId', {
       value: network.runtimeSecurityGroup.securityGroupId,
     });
     new cdk.CfnOutput(this, 'RuntimeRoleArn', {
       value: runtimeRole.role.roleArn,
+    });
+    new cdk.CfnOutput(this, 'HelloWorldRuntimeArn', {
+      value: helloWorld.runtime.agentRuntimeArn,
     });
   }
 }

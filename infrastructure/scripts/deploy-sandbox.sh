@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Guarded deploy. Do not run until the Step 1 change set is explicitly approved.
+# Guarded deploy. Do not run until the Step 1B change set is explicitly approved.
 set -euo pipefail
 
 AWS_PROFILE="${AWS_PROFILE:-AEA-Sandbox-PowerUser}"
@@ -34,6 +34,15 @@ export CDK_DEFAULT_REGION="$AWS_REGION"
 
 cd "$INFRA_DIR"
 npx tsx scripts/check-deploy-target.ts
+
+ZONE_JSON="$(
+  aws ec2 describe-availability-zones \
+    --profile "$AWS_PROFILE" \
+    --region "$AWS_REGION" \
+    --query 'AvailabilityZones[].{name:ZoneName,id:ZoneId}' \
+    --output json
+)"
+npx tsx scripts/check-availability-zones.ts "$ZONE_JSON"
 
 echo
 echo "Planned change set (nothing has been deployed yet)"

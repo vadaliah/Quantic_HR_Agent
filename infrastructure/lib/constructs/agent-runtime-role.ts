@@ -26,6 +26,9 @@ export class AgentRuntimeRole extends Construct {
           StringEquals: {
             'aws:SourceAccount': account,
           },
+          ArnLike: {
+            'aws:SourceArn': `arn:aws:bedrock-agentcore:${region}:${account}:*`,
+          },
         },
       }),
       description: 'Execution role for the Quantic AgentCore runtime. No Café or AEA resources.',

@@ -1,6 +1,6 @@
 # Quantic infrastructure
 
-Independent CDK app for `QuanticHrAgentStack`. It does not import or modify `CafeFausseApplicationStack` or `AeaSandboxStack`.
+Independent CDK app for `QuanticHrAgentStack`. It does not import or modify `CafeFausseApplicationStack` or `AeaSandboxStack`. Step 1B adds a stdlib AgentCore Hello World runtime on the same VPC. It does not implement RAG, MCP tools, or HR workflows.
 
 Local checks do not call AWS:
 
@@ -12,7 +12,7 @@ npm run build
 npm run synth
 ```
 
-`scripts/synth-infra.sh` is the same offline synth. `scripts/validate-aws-env.sh` is a read-only identity check. `scripts/deploy-sandbox.sh` and the database scripts are authored for a later approval and were not run in Step 1. Deploy asks you to type the stack name, prints the account, region, database, and secret path, and refuses the Café Fausse and AEA stack names.
+`scripts/synth-infra.sh` is the same offline synth. `scripts/validate-aws-env.sh` is a read-only identity check. `scripts/predeploy-check.sh` runs local tests, synth, identity, AZ IDs, and a stack/runtime inventory. `scripts/deploy-sandbox.sh` and the database scripts stay gated: they refuse Café Fausse and AEA stack names, prove `use2-az1`/`use2-az2`, print the stack, database, and secret path, and deploy only after you type the stack name and `deploy`.
 
 ## What synth creates
 
@@ -20,6 +20,7 @@ npm run synth
 - Aurora PostgreSQL 17.4 Serverless v2 (0.5–2 ACU), encrypted, IAM auth, database `quantic_hr`, secret `quantic-hr-agent/dev/database/admin`.
 - SSM admin host (`t4g.nano`) in a private subnet. Its AMI is an SSM parameter resolved at deploy time.
 - Runtime role `quantic-hr-agent-dev-runtime`, scoped to the selected Bedrock models, `rds-db:connect` as `quantic_hr_agent`, and one log group.
+- AgentCore runtime `QuanticHelloWorld` (`networkMode=VPC`, HTTP `/ping` and `/invocations`). Direct code deploy of `runtime/hello_world`. No model or database call.
 
 SQL under `database/migrations/` is not applied here. The first live session, after approval, is still a read-only check of `pg_available_extensions` before `CREATE EXTENSION vector`.
 

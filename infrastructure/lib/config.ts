@@ -26,6 +26,7 @@ export const quanticConfig = {
   availabilityZones: ['us-east-2a', 'us-east-2b'],
   agentCoreAvailabilityZoneIds: ['use2-az1', 'use2-az2'],
   vpcCidr: '10.20.0.0/16',
+  helloWorldRuntimeName: 'QuanticHelloWorld',
   adminAmiParameter:
     '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64',
 } as const;
