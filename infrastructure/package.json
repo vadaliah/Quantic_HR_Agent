@@ -7,6 +7,7 @@
     "build": "tsc --noEmit",
     "test": "jest",
     "synth": "cdk synth --lookups false --version-reporting false",
+    "synth:reuse": "cdk synth --lookups false --version-reporting false -c quanticDatabaseMode=reuse-cafe-fausse",
     "diff": "echo 'Read-only: cdk diff contacts AWS and changes nothing. Do not deploy from this command.' && cdk diff",
     "predeploy-check": "bash scripts/predeploy-check.sh"
   },

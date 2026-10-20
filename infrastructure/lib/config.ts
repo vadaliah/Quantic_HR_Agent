@@ -31,6 +31,33 @@ export const quanticConfig = {
     '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64',
 } as const;
 
+export type DatabaseMode = 'create' | 'reuse-cafe-fausse';
+
+/**
+ * Live Café Fausse cluster identifiers from the 20 Oct 2026 read-only inventory.
+ * Used only when quanticDatabaseMode=reuse-cafe-fausse. Import is by attributes
+ * so synth stays offline. The cluster, secret, and security group are not updated.
+ */
+export const cafeFausseAurora = {
+  clusterIdentifier: 'cafefausseapplicationstac-databaseaurorapostgres65-zchaodeehzxe',
+  clusterResourceIdentifier: 'cluster-7D7XF4SYGRI7TSN7NJV5FNZHNA',
+  securityGroupId: 'sg-09f0dd96526f3085f',
+  secretName: 'cafe-fausse-application/database/admin',
+  vpcId: 'vpc-0a6e62a6eae7cb617',
+  port: 5432,
+} as const;
+
+export function resolveDatabaseMode(scope: { node: { tryGetContext(key: string): unknown } }): DatabaseMode {
+  const raw = String(scope.node.tryGetContext('quanticDatabaseMode') ?? 'create');
+  if (raw === 'create') {
+    return 'create';
+  }
+  if (raw === 'reuse-cafe-fausse' || raw === 'reuse') {
+    return 'reuse-cafe-fausse';
+  }
+  throw new Error(`Unknown quanticDatabaseMode "${raw}". Use create or reuse-cafe-fausse.`);
+}
+
 export function bedrockInvokeResourceArns(account: string): string[] {
   const profile = `arn:aws:bedrock:${quanticConfig.region}:${account}:inference-profile/${quanticConfig.chatInferenceProfileId}`;
   const embedding = `arn:aws:bedrock:${quanticConfig.region}::foundation-model/${quanticConfig.embeddingModelId}`;

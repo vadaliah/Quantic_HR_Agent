@@ -1,11 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 
-import { quanticConfig } from '../lib/config';
+import { cafeFausseAurora, quanticConfig, resolveDatabaseMode } from '../lib/config';
 import { QuanticHrAgentStack } from '../lib/infrastructure-stack';
 
-function synthesize(): Template {
-  const app = new cdk.App();
+function synthesize(context: Record<string, string> = {}): Template {
+  const app = new cdk.App({ context });
   const stack = new QuanticHrAgentStack(app, quanticConfig.stackName, {
     env: { account: quanticConfig.account, region: quanticConfig.region },
   });
@@ -140,5 +140,33 @@ describe('AgentCore Hello World runtime', () => {
     });
     expect(json).not.toContain('search_policy_documents');
     expect(json).not.toContain('AWS::BedrockAgentCore::Gateway');
+  });
+});
+
+describe('reuse-cafe-fausse database mode', () => {
+  const template = synthesize({ quanticDatabaseMode: 'reuse-cafe-fausse' });
+  const json = JSON.stringify(template.toJSON());
+
+  test('does not create Aurora, secrets, or security-group ingress', () => {
+    template.resourceCountIs('AWS::RDS::DBCluster', 0);
+    template.resourceCountIs('AWS::RDS::DBInstance', 0);
+    template.resourceCountIs('AWS::SecretsManager::Secret', 0);
+    template.resourceCountIs('AWS::EC2::SecurityGroupIngress', 0);
+    template.resourceCountIs('AWS::EC2::Instance', 0);
+    template.resourceCountIs('AWS::BedrockAgentCore::Runtime', 1);
+    template.resourceCountIs('AWS::EC2::NatGateway', 1);
+  });
+
+  test('references the Café cluster resource id for IAM only and does not target AEA', () => {
+    expect(json).toContain(cafeFausseAurora.clusterResourceIdentifier);
+    expect(json).toContain(cafeFausseAurora.clusterIdentifier);
+    expect(json).not.toContain('AeaSandbox');
+    expect(json).not.toContain('aea/sandbox');
+  });
+
+  test('rejects an unknown database mode', () => {
+    expect(() =>
+      resolveDatabaseMode({ node: { tryGetContext: () => 'drop-and-replace' } }),
+    ).toThrow(/Unknown quanticDatabaseMode/);
   });
 });

@@ -50,8 +50,9 @@ echo "  project : $QUANTIC_PROJECT"
 echo "  stack   : $QUANTIC_STACK_NAME"
 echo "  account : $ACCOUNT"
 echo "  region  : $AWS_REGION"
-echo "  database: quantic_hr"
-echo "  secret  : quantic-hr-agent/dev/database/admin"
+echo "  database mode: ${QUANTIC_DATABASE_MODE:-create}"
+echo "  database: quantic_hr (create) or existing Café cluster (reuse-cafe-fausse)"
+echo "  secret  : quantic-hr-agent/dev/database/admin (create mode only)"
 echo "  profile : $AWS_PROFILE"
 echo
 echo "Blocked stacks: CafeFausseApplicationStack, AeaSandboxStack"
@@ -63,7 +64,9 @@ if [[ "$reply" != "$QUANTIC_STACK_NAME" ]]; then
   exit 1
 fi
 
-npx aws-cdk diff --profile "$AWS_PROFILE"
+CDK_DATABASE_CONTEXT=(-c "quanticDatabaseMode=${QUANTIC_DATABASE_MODE:-create}")
+
+npx aws-cdk diff --profile "$AWS_PROFILE" "${CDK_DATABASE_CONTEXT[@]}"
 read -r -p "Apply the diff above? Type deploy to continue: " confirm
 if [[ "$confirm" != "deploy" ]]; then
   echo "Deployment cancelled."
@@ -72,4 +75,5 @@ fi
 
 npx aws-cdk deploy "$QUANTIC_STACK_NAME" \
   --profile "$AWS_PROFILE" \
-  --require-approval broadening
+  --require-approval broadening \
+  "${CDK_DATABASE_CONTEXT[@]}"
