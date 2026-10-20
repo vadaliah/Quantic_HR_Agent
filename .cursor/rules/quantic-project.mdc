@@ -26,3 +26,11 @@ alwaysApply: true
 - Report in the final handoff: branch name, commit SHA, push status, tests run/results, changed files, unresolved issues, and link to the branch or PR if available. Never claim a push was successful without verifying the remote.
 - Do not merge to `main`, create/reconfigure paid cloud infrastructure, run `cdk deploy`, execute database migrations against AWS, or perform other live cloud changes unless separately authorized.
 - **Current handoff recovery:** the local branch `feature/step1-infrastructure` reportedly contains commit `c4108a6`. If it exists in the local checkout, inspect it, run required checks, then push that branch to `origin` and report the resulting URL. Do not recreate or overwrite the existing work; do not assume it is already on GitHub.
+
+
+## Cost-first override (approved October 20, 2026)
+- **First read `docs/COST_FIRST_DELIVERY_STRATEGY.md`.** It overrides earlier instructions to deploy the full Aurora/NAT/AgentCore baseline immediately.
+- Default to local open-source components, synthetic fixtures, and genuinely eligible free tiers. Complete application functionality, MCP/RAG tests and evaluation before provisioning metered infrastructure. Verify free-tier conditions; do not imply usage-based services are free.
+- **DO NOT deploy** the existing Quantic AWS CDK stack, create NAT/Aurora/EC2/paid hosts or run chargeable Bedrock/AgentCore inference without separate, explicit user approval for the proposed cost and resource change set. Preserve CDK source as opt-in future variant.
+- Prefer a single low-cost/free-tier grader-accessible deployed service; defer paid infrastructure until indispensable, and create as late as feasible. No existing Café Fausse/AEA stack changes.
+- Commit and push implementation changes automatically on a feature branch; never merge or invoke paid services without approval.
