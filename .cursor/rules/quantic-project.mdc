@@ -34,3 +34,9 @@ alwaysApply: true
 - **DO NOT deploy** the existing Quantic AWS CDK stack, create NAT/Aurora/EC2/paid hosts or run chargeable Bedrock/AgentCore inference without separate, explicit user approval for the proposed cost and resource change set. Preserve CDK source as opt-in future variant.
 - Prefer a single low-cost/free-tier grader-accessible deployed service; defer paid infrastructure until indispensable, and create as late as feasible. No existing Café Fausse/AEA stack changes.
 - Commit and push implementation changes automatically on a feature branch; never merge or invoke paid services without approval.
+
+
+## Latest user architecture decision (October 20, 2026)
+- **Read `docs/AURORA_ARCHITECTURE_DECISION.md` first.** The Quantic group project continues with Aurora PostgreSQL/pgvector and the independent CDK AWS stack. This supersedes the earlier direction to replace Aurora with SQLite/FAISS as the target architecture.
+- Keep free-tier/cost discipline where possible, but do not redesign the database or hosting unilaterally. The group needs a shared accessible application; Aurora must remain private and accessed via approved network paths.
+- Finish the infrastructure baseline and validate AgentCore Hello World before starting HR/RAG functionality. Cloud provisioning still requires approved change set, costs, and passed predeploy verification. Never modify Café Fausse or AEA.
