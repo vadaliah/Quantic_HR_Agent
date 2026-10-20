@@ -9,4 +9,4 @@ Agentic RAG + MCP project for Quantic AI Engineering Techniques and Architecture
 
 Planned architecture: Vite React + FastAPI → Bedrock AgentCore/LangGraph → actual MCP tools → Aurora PostgreSQL/pgvector + Bedrock. Initial workflows are remote-work eligibility and PTO guidance.
 
-**Current status:** documentation/planning initialized; AWS live infrastructure and project runtime not yet verified. The first implementation step is a read-only inspection of existing [Café Fausse infrastructure](https://github.com/vadaliah/Quantic_Cafe_Fausse_Application), followed by a Quantic-only implementation proposal for approval.
+**Current status:** Step 1 CDK code is local only. `infrastructure/` synthesizes `QuanticHrAgentStack` and does not deploy it. See [infrastructure/README.md](infrastructure/README.md) and [docs/STEP1_IMPLEMENTATION_RESULTS.md](docs/STEP1_IMPLEMENTATION_RESULTS.md). Café Fausse and AEA resources stay untouched.

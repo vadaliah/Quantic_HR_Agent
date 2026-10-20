@@ -1,0 +1,26 @@
+{
+  "name": "quantic-hr-agent-infrastructure",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Independent AWS CDK stack for the Quantic HR agent",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "jest",
+    "synth": "cdk synth --lookups false --version-reporting false",
+    "diff": "echo 'Read-only: cdk diff contacts AWS and changes nothing. Do not deploy from this command.' && cdk diff"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.15.0",
+    "@swc/jest": "^0.2.39",
+    "@types/jest": "^30",
+    "@types/node": "^24.10.1",
+    "aws-cdk": "2.1136.0",
+    "jest": "^30",
+    "tsx": "^4.23.0",
+    "typescript": "~5.8.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.264.0",
+    "constructs": "^10.5.0"
+  }
+}
