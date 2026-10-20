@@ -1,21 +1,23 @@
-# Step 3 — Application spine (October 20, 2026)
+# Deferred — Application development (NOT AUTHORIZED YET)
 
-## Scope and approval
-User deferred all Café Fausse snapshot/deletion/Aurora decisions until evening. **No AWS mutations** (including snapshots, starts, deletion, provisioning or deployment). Keep Aurora PostgreSQL as target database, with local PostgreSQL/pgvector for tests. Do not block app work on the database decision. Keep PR #1 in draft until reviewed.
+**Status (October 20, 2026):** The user clarified that application/RAG/MCP business implementations must wait until the group reviews the business requirements. This document is retained only as a deferred idea list. **Do not execute this work now.**
 
-## Increment 1 — RAG and robust conversational workflows
-On `feature/cost-first-local-dev` (or fresh feature branch), prioritize:
-1. Ingest the existing policy corpus into heading-aware sections with stable document/section IDs, source URIs and content hashes; build idempotent PostgreSQL/pgvector migrations and deterministic fixtures. Embeddings should use a genuine locally runnable model when practical, and permit deterministic fake embedding in CI. Include vector search, metadata filters, similarity diagnostics, citations and negative retrieval tests. Do not present ILIKE as semantic RAG.
-2. Preserve the genuine MCP stdio protocol client/server, six tools and traceability. Add input validation, explicit errors, parameterized SQL, and safe policy-compliance semantics.
-3. Build LLM-driven LangGraph planner/response synthesis behind an adapter for local/free model and eventual Bedrock; use mocked provider in automated tests. Do not conflate the existing keyword router with an AI-powered agent. Ensure no unapproved paid API invocation.
-4. Implement two workflows: (a) remote-work eligibility with destination/region and policy checks; (b) PTO with user-requested duration (fix hardcoded 8-hour bug), remaining-balance checks, clarifying questions and no irreversible HR changes. Answer using structured MCP result + precise source citation; surface uncertainty and missing information.
-5. Verify end-to-end `/chat`, `/health`, React UI, and representative good/edge/failure flows; test running from a clean checkout. Keep secrets out of source and CI.
+## Current priority: infrastructure readiness only
 
-## Deliverables
-- Small, reviewable feature commits/PR(s), tests and test logs; auto-commit and push feature branch, no auto merge.
-- Document how to run locally, how to change PostgreSQL `DATABASE_URL` to Aurora later, and any VPC/private networking blockers without changing AWS.
-- A concise status summary showing which behaviors were tested live vs mocked, remaining blockers, and next increment.
-- Avoid broad refactor or unnecessary infra deployment.
+Prepare a reproducible, documented, group-ready *infrastructure foundation*, without implementing business functionality and without changing AWS resources yet:
 
-## Separate pending decision
-Café Fausse snapshot and possible deletion **remain explicitly deferred**. If resumed, clarify whether deleting only `cafe_fausse_db` or the entire cluster; do not delete the cluster if it will be reused for Quantic.
+1. Preserve the already implemented Quantic AWS CDK constructs and the separate minimal AgentCore Hello World runtime. Review them for deploy readiness, but keep the deploy guard active.
+2. Preserve locally runnable PostgreSQL/pgvector, basic Python/TypeScript dependencies, CI and minimal /health or Hello World smoke scaffolding as infrastructure diagnostics. Do not develop new HR schema, RAG, embeddings, agent reasoning, or MCP business tools. Already committed prototype files can remain on draft branches; do not treat them as approved requirements.
+3. Confirm configurable connection parameters/secret handling, bootstrap scripts, reproducible install/test commands, runtime IAM/network assumptions, CI checks, and the deployment rollback/cleanup approach.
+4. Maintain a cost inventory and identify the smallest shared AWS topology. In particular, assess reuse of the Café Fausse Aurora cluster rather than deploying the duplicate Quantic Aurora/NAT stack.
+5. Document networking requirements for a shared group-accessible service, and distinguish *deployment-ready* from *deployed*. Do not assume a private Aurora cluster is reachable from a public service without an approved connectivity path.
+6. Prepare a short infrastructure readiness checklist with blockers and an AWS provisioning plan for later user approval.
+
+## Restrictions
+- No Café Fausse snapshot, startup, modifications, database deletion or cluster deletion. The user deferred this decision until evening.
+- No AWS deploy, new billable resources, or live Bedrock/AgentCore invocation without explicit approval.
+- No HR data model, RAG, tool/business logic or LangGraph feature development until business requirements review.
+- No automatic merge; commit/push reviewed infrastructure-only documentation/configuration to feature branch.
+
+## Next deliverable
+`docs/INFRASTRUCTURE_READINESS.md`: completed components, evidence of offline checks, credentials/network blockers, shared access design options with incremental recurring costs, and a later approval checklist. Keep Nov 15 deadline.
