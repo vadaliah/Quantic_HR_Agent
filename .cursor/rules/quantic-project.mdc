@@ -15,3 +15,14 @@ alwaysApply: true
 8. Produce a mock synthetic corpus/data set, 20–30 evaluated cases, metrics, latency and one ablation. CI must test startup and real MCP discovery/calls before deployment; use offline fixtures where AWS access is not available.
 9. Keep the code and docs small and comprehensible. Avoid multi-agent sprawl, Gateway, Kubernetes, enterprise RBAC, general-purpose IaC library development and platform migration before the deadline.
 10. Observe milestone gates in `docs/MASTER_PLAN.md`. **Step 0 only initially:** audit sources, verify AWS read-only, freeze contracts, scaffold and stub tests. Request approval before provisioning, deploys, destructive action or unexpected cost.
+
+
+## Automated GitHub handoff after each approved development step
+
+- Treat GitHub as the shared review handoff. After completing an **approved code/documentation development step**, run relevant local build, tests and secret checks; report failures rather than concealing them.
+- Work on a task-specific feature branch, never commit directly to `main` for implementation tasks. Do not force-push or overwrite others' commits.
+- Commit only intended source, tests and documentation; inspect `git status` and `git diff --staged` first. Never commit `.env`, tokens, credentials, database dumps containing private data, generated CDK assets, or secrets.
+- When tests/checks finish and there is a reviewable change, **push the current feature branch to `origin` automatically** (set upstream on its first push). Do not ask the user to manually run routine Git commands. If push fails, report the exact non-sensitive error and suggested remedy. Do not change Git credentials or permissions without approval.
+- Report in the final handoff: branch name, commit SHA, push status, tests run/results, changed files, unresolved issues, and link to the branch or PR if available. Never claim a push was successful without verifying the remote.
+- Do not merge to `main`, create/reconfigure paid cloud infrastructure, run `cdk deploy`, execute database migrations against AWS, or perform other live cloud changes unless separately authorized.
+- **Current handoff recovery:** the local branch `feature/step1-infrastructure` reportedly contains commit `c4108a6`. If it exists in the local checkout, inspect it, run required checks, then push that branch to `origin` and report the resulting URL. Do not recreate or overwrite the existing work; do not assume it is already on GitHub.
