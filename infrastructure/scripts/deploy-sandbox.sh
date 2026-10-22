@@ -2,6 +2,12 @@
 # Guarded deploy. Do not run until the Step 1B change set is explicitly approved.
 set -euo pipefail
 
+# Require explicit, per-session approval before *any* cloud deployment step.
+if [[ "${QUANTIC_ALLOW_AWS_DEPLOY:-}" != "yes" ]]; then
+  echo "BLOCKED: AWS provisioning is disabled. Set QUANTIC_ALLOW_AWS_DEPLOY=yes only after explicit cost/change-set approval."
+  exit 1
+fi
+
 AWS_PROFILE="${AWS_PROFILE:-AEA-Sandbox-PowerUser}"
 AWS_REGION="${AWS_REGION:-us-east-2}"
 EXPECTED_ACCOUNT="${EXPECTED_ACCOUNT:-287238357427}"
