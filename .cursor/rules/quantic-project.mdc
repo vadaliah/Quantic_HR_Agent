@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Project instructions
 
-1. Read `docs/MASTER_PLAN.md` and `docs/INFRASTRUCTURE_REUSE.md` before development. Target date **November 15, 2026**; three-person team and Quantic rubric score 5.
+1. Read `docs/COST_FIRST_DELIVERY_STRATEGY.md` first — it is the governing strategy. Then `docs/MASTER_PLAN.md` and `docs/INFRASTRUCTURE_REUSE.md`. Target date **November 15, 2026**; three-person team and Quantic rubric score 5. Do not provision billable AWS resources.
 2. Start in **assessment / plan mode**. Inspect this repository and `vadaliah/Quantic_Cafe_Fausse_Application` (local checkout or GitHub). Verify live AWS state using read-only commands when credentialed; do not confuse repository code with deployed AWS resources.
 3. Report a reuse matrix of file paths: reusable, adaptable, new, deferred. Propose minimal Quantic-specific changes, time impact and any risk to the deadline. Wait for approval before infrastructure modifications.
 4. Preserve AWS CDK TypeScript, Aurora PostgreSQL/pgvector, Bedrock, AgentCore, LangGraph, actual MCP protocol, FastAPI and Vite React. Keep Render hosting unless an alternative is reviewed and approved.
@@ -14,7 +14,7 @@ alwaysApply: true
 7. The LLM chooses tools and synthesizes grounded answers. Deterministic tools apply policy checks where possible. Provide citations and concise tool call traces (name, arguments, summarized output and evidence), not hidden chain-of-thought.
 8. Produce a mock synthetic corpus/data set, 20–30 evaluated cases, metrics, latency and one ablation. CI must test startup and real MCP discovery/calls before deployment; use offline fixtures where AWS access is not available.
 9. Keep the code and docs small and comprehensible. Avoid multi-agent sprawl, Gateway, Kubernetes, enterprise RBAC, general-purpose IaC library development and platform migration before the deadline.
-10. Observe milestone gates in `docs/MASTER_PLAN.md`. **Step 0 only initially:** audit sources, verify AWS read-only, freeze contracts, scaffold and stub tests. Request approval before provisioning, deploys, destructive action or unexpected cost.
+10. Observe milestone gates in `docs/MASTER_PLAN.md`. Keep CDK TypeScript for later cutover. `cdk synth` and tests are allowed. `cdk deploy` and `deploy-sandbox.sh` stay blocked unless `QUANTIC_ALLOW_AWS_DEPLOY=yes` after a written paid-infra approval. Request approval before provisioning, deploys, destructive action or unexpected cost.
 
 
 ## Automated GitHub handoff after each approved development step
