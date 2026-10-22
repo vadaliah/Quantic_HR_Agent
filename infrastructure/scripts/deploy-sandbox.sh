@@ -4,7 +4,9 @@ set -euo pipefail
 
 # Require explicit, per-session approval before *any* cloud deployment step.
 if [[ "${QUANTIC_ALLOW_AWS_DEPLOY:-}" != "yes" ]]; then
-  echo "BLOCKED: AWS provisioning is disabled. Set QUANTIC_ALLOW_AWS_DEPLOY=yes only after explicit cost/change-set approval."
+  echo "BLOCKED: AWS provisioning is disabled."
+  echo "CDK code is preserved for later. Refusing to provision billable resources."
+  echo "Set QUANTIC_ALLOW_AWS_DEPLOY=yes only after explicit cost/change-set approval."
   exit 1
 fi
 

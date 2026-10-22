@@ -18,7 +18,9 @@ Default `cdk synth` creates a new Aurora cluster. To synthesize against the exis
 npm run synth:reuse
 ```
 
-That mode omits new RDS/secret/admin-host resources and does not add security-group ingress. `scripts/synth-infra.sh` is the default offline synth. `scripts/validate-aws-env.sh` is a read-only identity check. `scripts/predeploy-check.sh` runs local tests, synth, identity, AZ IDs, and a stack/runtime inventory. `scripts/deploy-sandbox.sh` and the database scripts stay gated: they refuse Café Fausse and AEA stack names, prove `use2-az1`/`use2-az2`, print the stack, database, and secret path, and deploy only after you type the stack name and `deploy`.
+That mode omits new RDS/secret/admin-host resources and does not add security-group ingress. `scripts/synth-infra.sh` is the default offline synth. `scripts/validate-aws-env.sh` is a read-only identity check. `scripts/predeploy-check.sh` runs local tests, synth, identity, AZ IDs, and a stack/runtime inventory.
+
+`scripts/deploy-sandbox.sh` exits unless `QUANTIC_ALLOW_AWS_DEPLOY=yes`. After that flag, it still refuses Café Fausse and AEA stack names, proves `use2-az1`/`use2-az2`, and deploys only after you type the stack name and `deploy`. Do not provision NAT, Aurora, or AgentCore without that approval.
 
 ## What synth creates
 

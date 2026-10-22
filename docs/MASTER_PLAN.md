@@ -2,6 +2,8 @@
 
 **Deadline: November 15, 2026.** Three-person team. Target: Quantic rubric score 5, with no unnecessary platform scope.
 
+**Governing delivery path:** [COST_FIRST_DELIVERY_STRATEGY.md](COST_FIRST_DELIVERY_STRATEGY.md). Do not provision billable AWS resources. Implement the same architecture locally first.
+
 ## Core architecture
 Vite React UI + FastAPI BFF (/chat, /health) → AWS Bedrock AgentCore (LangGraph orchestrator) → real MCP client/server tools → Aurora Serverless v2 PostgreSQL + pgvector (policy RAG and synthetic HR records). Bedrock for chat and embeddings. Retain Render for UI/BFF unless a simpler fully automated deployment is justified and approved.
 

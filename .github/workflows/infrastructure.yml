@@ -30,3 +30,4 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run synth
+      - run: npm run synth:reuse

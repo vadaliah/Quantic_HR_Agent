@@ -1,0 +1,15 @@
+# Optional. Prefer scripts/local-db.sh when Docker is unavailable.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: quantic
+      POSTGRES_PASSWORD: quantic
+      POSTGRES_DB: quantic_hr
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quantic -d quantic_hr"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
