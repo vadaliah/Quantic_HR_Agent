@@ -28,10 +28,10 @@ cd frontend && npm install && npm run dev
 
 ```bash
 cd infrastructure
-npm ci && npm test && npm run synth && npm run synth:reuse
+npm ci && npm test && npm run build && npm run synth
 ```
 
-Do not run `scripts/deploy-sandbox.sh`. Café Fausse and AEA stay untouched.
+The synthesized stack is an independent Aurora database named `quantic_hr_agent`. It does not create a NAT gateway or AgentCore runtime, and it does not import Café Fausse. Do not run `scripts/deploy-sandbox.sh` until that change set and its monthly cost are approved. Café Fausse and AEA stay untouched.
 
 ## Docs
 - [Cost-first strategy](docs/COST_FIRST_DELIVERY_STRATEGY.md)

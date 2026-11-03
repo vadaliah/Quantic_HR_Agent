@@ -11,5 +11,5 @@ uv run pytest -q
 echo "== React / Vite =="
 (cd frontend && npm ci && npm run build)
 echo "== CDK compilation / tests / synth (NO AWS) =="
-(cd infrastructure && npm ci && npm run build && npm test -- --runInBand && npm run synth && npm run synth:reuse)
+(cd infrastructure && npm ci && npm run build && npm test -- --runInBand && npm run synth)
 echo "PASS: offline checks. Bedrock/AgentCore/Aurora deployment NOT validated."

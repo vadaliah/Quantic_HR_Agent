@@ -9,9 +9,13 @@ export const quanticConfig = {
   account: '287238357427',
   region: 'us-east-2',
   awsProfile: 'AEA-Sandbox-PowerUser',
-  databaseName: 'quantic_hr',
+  databaseName: 'quantic_hr_agent',
   adminUsername: 'quantic_hr_admin',
   runtimeDbUsername: 'quantic_hr_agent',
+  /** Aurora Serverless v2 scale-to-zero. 300 seconds is the shortest pause AWS allows. */
+  serverlessV2MinCapacity: 0,
+  serverlessV2MaxCapacity: 2,
+  serverlessV2AutoPauseSeconds: 300,
   secretName: 'quantic-hr-agent/dev/database/admin',
   chatInferenceProfileId: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
   chatFoundationModelId: 'anthropic.claude-sonnet-4-5-20250929-v1:0',
@@ -31,12 +35,11 @@ export const quanticConfig = {
     '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64',
 } as const;
 
-export type DatabaseMode = 'create' | 'reuse-cafe-fausse';
+export type DatabaseMode = 'create';
 
 /**
- * Live Café Fausse cluster identifiers from the 20 Oct 2026 read-only inventory.
- * Used only when quanticDatabaseMode=reuse-cafe-fausse. Import is by attributes
- * so synth stays offline. The cluster, secret, and security group are not updated.
+ * Identifiers from the 20 Oct 2026 read-only inventory. Tests assert the
+ * synthesized template does not contain them. Do not import or modify these.
  */
 export const cafeFausseAurora = {
   clusterIdentifier: 'cafefausseapplicationstac-databaseaurorapostgres65-zchaodeehzxe',
@@ -52,10 +55,19 @@ export function resolveDatabaseMode(scope: { node: { tryGetContext(key: string):
   if (raw === 'create') {
     return 'create';
   }
-  if (raw === 'reuse-cafe-fausse' || raw === 'reuse') {
-    return 'reuse-cafe-fausse';
+  throw new Error(
+    `Refusing quanticDatabaseMode "${raw}". Café Fausse and AEA stay untouched. This stack only creates ${quanticConfig.databaseName}.`,
+  );
+}
+
+export function assertDatabaseOnlyDeployment(scope: { node: { tryGetContext(key: string): unknown } }): void {
+  resolveDatabaseMode(scope);
+  const raw = String(scope.node.tryGetContext('quanticDeploymentScope') ?? 'database-only');
+  if (raw !== 'database-only') {
+    throw new Error(
+      `Refusing quanticDeploymentScope "${raw}". This deployment creates only the private Aurora database. NAT, AgentCore, and admin hosts are excluded.`,
+    );
   }
-  throw new Error(`Unknown quanticDatabaseMode "${raw}". Use create or reuse-cafe-fausse.`);
 }
 
 export function bedrockInvokeResourceArns(account: string): string[] {

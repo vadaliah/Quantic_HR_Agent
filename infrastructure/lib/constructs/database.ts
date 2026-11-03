@@ -1,4 +1,4 @@
-import { RemovalPolicy } from 'aws-cdk-lib';
+import { CfnResource, Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -20,7 +20,7 @@ export class DatabaseConstruct extends Construct {
 
     this.securityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
       vpc: props.vpc,
-      description: 'Aurora PostgreSQL. Inbound only from approved Quantic groups.',
+      description: 'Private Aurora PostgreSQL. No inbound until a later approved client.',
       allowAllOutbound: false,
     });
 
@@ -32,9 +32,14 @@ export class DatabaseConstruct extends Construct {
         secretName: quanticConfig.secretName,
       }),
       iamAuthentication: true,
-      writer: rds.ClusterInstance.serverlessV2('writer'),
-      serverlessV2MinCapacity: 0.5,
-      serverlessV2MaxCapacity: 2,
+      writer: rds.ClusterInstance.serverlessV2('writer', {
+        publiclyAccessible: false,
+        autoMinorVersionUpgrade: false,
+        enablePerformanceInsights: false,
+      }),
+      serverlessV2MinCapacity: quanticConfig.serverlessV2MinCapacity,
+      serverlessV2MaxCapacity: quanticConfig.serverlessV2MaxCapacity,
+      serverlessV2AutoPauseDuration: Duration.seconds(quanticConfig.serverlessV2AutoPauseSeconds),
       vpc: props.vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
@@ -43,13 +48,18 @@ export class DatabaseConstruct extends Construct {
       storageEncrypted: true,
       deletionProtection: true,
       removalPolicy: RemovalPolicy.RETAIN,
+      backup: {
+        retention: Duration.days(1),
+      },
       securityGroups: [this.securityGroup],
     });
 
-    if (!this.cluster.secret) {
+    const generatedSecret = this.cluster.node.tryFindChild('Secret')?.node.defaultChild;
+    if (!this.cluster.secret || !CfnResource.isCfnResource(generatedSecret)) {
       throw new Error('Database secret was not created');
     }
 
+    generatedSecret.applyRemovalPolicy(RemovalPolicy.RETAIN);
     this.secret = this.cluster.secret;
   }
 }

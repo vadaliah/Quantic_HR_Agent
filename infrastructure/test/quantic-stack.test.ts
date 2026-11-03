@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 
 import { cafeFausseAurora, quanticConfig, resolveDatabaseMode } from '../lib/config';
+import { ExistingCafeFausseDatabase } from '../lib/constructs/existing-database';
 import { QuanticHrAgentStack } from '../lib/infrastructure-stack';
 
 function synthesize(context: Record<string, string> = {}): Template {
@@ -16,13 +17,18 @@ describe('QuanticHrAgentStack isolation', () => {
   const template = synthesize();
   const json = JSON.stringify(template.toJSON());
 
-  test('does not name Café Fausse or AEA resources', () => {
+  test('does not name or import Café Fausse or AEA resources', () => {
     for (const forbidden of [
       'cafe-fausse',
       'cafe_fausse',
       'CafeFausse',
       'AeaSandbox',
       'aea/sandbox',
+      cafeFausseAurora.clusterIdentifier,
+      cafeFausseAurora.clusterResourceIdentifier,
+      cafeFausseAurora.securityGroupId,
+      cafeFausseAurora.secretName,
+      cafeFausseAurora.vpcId,
     ]) {
       expect(json).not.toContain(forbidden);
     }
@@ -38,135 +44,90 @@ describe('QuanticHrAgentStack isolation', () => {
     });
   });
 
-  test('uses one NAT and keeps Aurora on isolated subnets', () => {
-    template.resourceCountIs('AWS::EC2::NatGateway', 1);
+  test('keeps Aurora on isolated subnets and creates no NAT, endpoints, or public network', () => {
+    template.resourceCountIs('AWS::EC2::NatGateway', 0);
+    template.resourceCountIs('AWS::EC2::EIP', 0);
+    template.resourceCountIs('AWS::EC2::InternetGateway', 0);
+    template.resourceCountIs('AWS::EC2::VPCEndpoint', 0);
     template.resourceCountIs('AWS::EC2::VPCPeeringConnection', 0);
+    template.resourceCountIs('AWS::EC2::Subnet', 2);
 
     const groups = template.findResources('AWS::RDS::DBSubnetGroup');
     const group = Object.values(groups)[0] as {
       Properties: { SubnetIds: Array<{ Ref: string }> };
     };
-    expect(group.Properties.SubnetIds.length).toBeGreaterThan(0);
+    expect(group.Properties.SubnetIds).toHaveLength(2);
     for (const subnet of group.Properties.SubnetIds) {
       expect(subnet.Ref.toLowerCase()).toContain('isolated');
     }
   });
 });
 
-describe('Aurora encryption and database ingress', () => {
+describe('empty Aurora database', () => {
   const template = synthesize();
+  const json = JSON.stringify(template.toJSON());
 
-  test('encrypts the new quantic_hr cluster and enables IAM auth', () => {
+  test('creates one encrypted PostgreSQL 17.4 Serverless v2 cluster that can pause', () => {
+    template.resourceCountIs('AWS::RDS::DBCluster', 1);
+    template.resourceCountIs('AWS::RDS::DBInstance', 1);
     template.hasResourceProperties('AWS::RDS::DBCluster', {
       StorageEncrypted: true,
       EnableIAMDatabaseAuthentication: true,
-      DatabaseName: 'quantic_hr',
+      DatabaseName: 'quantic_hr_agent',
       Engine: 'aurora-postgresql',
       EngineVersion: '17.4',
       DeletionProtection: true,
+      BackupRetentionPeriod: 1,
+      MasterUsername: quanticConfig.adminUsername,
       ServerlessV2ScalingConfiguration: {
-        MinCapacity: 0.5,
+        MinCapacity: 0,
         MaxCapacity: 2,
+        SecondsUntilAutoPause: 300,
       },
     });
-    template.hasResourceProperties('AWS::SecretsManager::Secret', {
-      Name: 'quantic-hr-agent/dev/database/admin',
+    template.hasResourceProperties('AWS::RDS::DBInstance', {
+      Engine: 'aurora-postgresql',
+      PubliclyAccessible: false,
+      AutoMinorVersionUpgrade: false,
+      EnablePerformanceInsights: false,
+      DBInstanceClass: 'db.serverless',
     });
-  });
-
-  test('allows PostgreSQL only from the runtime and admin security groups', () => {
-    const ingress = Object.values(template.findResources('AWS::EC2::SecurityGroupIngress'));
-    expect(ingress).toHaveLength(2);
-    for (const rule of ingress) {
-      const properties = rule.Properties as {
-        IpProtocol: string;
-        FromPort: number;
-        ToPort: number;
-        CidrIp?: string;
-        SourceSecurityGroupId?: unknown;
-      };
-      expect(properties.IpProtocol).toBe('tcp');
-      expect(properties.ToPort).toEqual(properties.FromPort);
-      expect(JSON.stringify(properties.FromPort)).toContain('Endpoint.Port');
-      expect(properties.CidrIp).toBeUndefined();
-      expect(properties.SourceSecurityGroupId).toBeDefined();
-    }
-  });
-});
-
-describe('runtime IAM scope', () => {
-  const template = synthesize();
-
-  test('limits the runtime role to selected models, IAM database auth, and its log group', () => {
-    const runtimeRoleId = Object.entries(template.findResources('AWS::IAM::Role')).find(
-      ([, role]) =>
-        (role as { Properties?: { RoleName?: string } }).Properties?.RoleName ===
-        'quantic-hr-agent-dev-runtime',
-    )?.[0];
-    expect(runtimeRoleId).toBeDefined();
-
-    const policies = Object.values(template.findResources('AWS::IAM::Policy')).filter((policy) =>
-      JSON.stringify(policy).includes(`"${runtimeRoleId}"`),
-    );
-    expect(policies.length).toBeGreaterThan(0);
-
-    const document = JSON.stringify(policies);
-    expect(document).toContain('bedrock:InvokeModel');
-    expect(document).toContain('rds-db:connect');
-    expect(document).toContain(quanticConfig.embeddingModelId);
-    expect(document).toContain(quanticConfig.chatInferenceProfileId);
-    expect(document).toContain('logs:PutLogEvents');
-    expect(document).not.toContain('secretsmanager:');
-    expect(document).not.toContain('cafe-fausse');
-    expect(document).not.toContain('"Action":"*"');
-    expect(document).not.toContain('bedrock:*');
-    expect(document).toContain('Sid":"XRayAccess');
-    expect(document).toContain('Sid":"CloudWatchMetrics');
-  });
-});
-
-describe('AgentCore Hello World runtime', () => {
-  const template = synthesize();
-  const json = JSON.stringify(template.toJSON());
-
-  test('creates one VPC Hello World runtime and no MCP or RAG services', () => {
-    template.resourceCountIs('AWS::BedrockAgentCore::Runtime', 1);
-    template.hasResourceProperties('AWS::BedrockAgentCore::Runtime', {
-      AgentRuntimeName: quanticConfig.helloWorldRuntimeName,
-      NetworkConfiguration: {
-        NetworkMode: 'VPC',
+    template.hasResource('AWS::SecretsManager::Secret', {
+      DeletionPolicy: 'Retain',
+      UpdateReplacePolicy: 'Retain',
+      Properties: {
+        Name: 'quantic-hr-agent/dev/database/admin',
       },
-      ProtocolConfiguration: 'HTTP',
     });
-    expect(json).not.toContain('search_policy_documents');
-    expect(json).not.toContain('AWS::BedrockAgentCore::Gateway');
+    template.resourceCountIs('AWS::SecretsManager::Secret', 1);
   });
-});
 
-describe('reuse-cafe-fausse database mode', () => {
-  const template = synthesize({ quanticDatabaseMode: 'reuse-cafe-fausse' });
-  const json = JSON.stringify(template.toJSON());
-
-  test('does not create Aurora, secrets, or security-group ingress', () => {
-    template.resourceCountIs('AWS::RDS::DBCluster', 0);
-    template.resourceCountIs('AWS::RDS::DBInstance', 0);
-    template.resourceCountIs('AWS::SecretsManager::Secret', 0);
+  test('does not open PostgreSQL, add schemas, or provision extra runtimes', () => {
     template.resourceCountIs('AWS::EC2::SecurityGroupIngress', 0);
     template.resourceCountIs('AWS::EC2::Instance', 0);
-    template.resourceCountIs('AWS::BedrockAgentCore::Runtime', 1);
-    template.resourceCountIs('AWS::EC2::NatGateway', 1);
+    template.resourceCountIs('AWS::BedrockAgentCore::Runtime', 0);
+    template.resourceCountIs('AWS::BedrockAgentCore::Gateway', 0);
+    template.resourceCountIs('AWS::KMS::Key', 0);
+    template.resourceCountIs('AWS::Logs::LogGroup', 0);
+    template.resourceCountIs('AWS::Lambda::Function', 0);
+    template.resourceCountIs('AWS::RDS::DBProxy', 0);
+    expect(json).not.toContain('CREATE TABLE');
+    expect(json).not.toContain('CREATE EXTENSION');
+    expect(json).not.toContain('search_policy_documents');
   });
 
-  test('references the Café cluster resource id for IAM only and does not target AEA', () => {
-    expect(json).toContain(cafeFausseAurora.clusterResourceIdentifier);
-    expect(json).toContain(cafeFausseAurora.clusterIdentifier);
-    expect(json).not.toContain('AeaSandbox');
-    expect(json).not.toContain('aea/sandbox');
-  });
-
-  test('rejects an unknown database mode', () => {
+  test('refuses Café reuse and any deployment scope beyond the database', () => {
+    expect(() => synthesize({ quanticDatabaseMode: 'reuse-cafe-fausse' })).toThrow(
+      /Café Fausse and AEA stay untouched/,
+    );
+    expect(() => synthesize({ quanticDeploymentScope: 'baseline' })).toThrow(
+      /NAT, AgentCore, and admin hosts are excluded/,
+    );
     expect(() =>
       resolveDatabaseMode({ node: { tryGetContext: () => 'drop-and-replace' } }),
-    ).toThrow(/Unknown quanticDatabaseMode/);
+    ).toThrow(/Café Fausse and AEA stay untouched/);
+    expect(() => new ExistingCafeFausseDatabase(new cdk.Stack(), 'Existing')).toThrow(
+      /Refusing to import Café Fausse Aurora/,
+    );
   });
 });

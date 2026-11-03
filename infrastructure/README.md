@@ -1,6 +1,6 @@
 # Quantic infrastructure
 
-Independent CDK app for `QuanticHrAgentStack`. It does not import or modify `CafeFausseApplicationStack` or `AeaSandboxStack`. Step 1B adds a stdlib AgentCore Hello World runtime on the same VPC. It does not implement RAG, MCP tools, or HR workflows.
+Independent CDK app for `QuanticHrAgentStack`. It creates a new Aurora PostgreSQL cluster and does not import or modify `CafeFausseApplicationStack` or `AeaSandboxStack`.
 
 Local checks do not call AWS:
 
@@ -12,42 +12,28 @@ npm run build
 npm run synth
 ```
 
-Default `cdk synth` creates a new Aurora cluster. To synthesize against the existing Café Fausse cluster **without modifying it**:
-
-```bash
-npm run synth:reuse
-```
-
-That mode omits new RDS/secret/admin-host resources and does not add security-group ingress. `scripts/synth-infra.sh` is the default offline synth. `scripts/validate-aws-env.sh` is a read-only identity check. `scripts/predeploy-check.sh` runs local tests, synth, identity, AZ IDs, and a stack/runtime inventory.
-
-`scripts/deploy-sandbox.sh` exits unless `QUANTIC_ALLOW_AWS_DEPLOY=yes`. After that flag, it still refuses Café Fausse and AEA stack names, proves `use2-az1`/`use2-az2`, and deploys only after you type the stack name and `deploy`. Do not provision NAT, Aurora, or AgentCore without that approval.
+`cdk diff` is read-only. `scripts/deploy-sandbox.sh` exits unless `QUANTIC_ALLOW_AWS_DEPLOY=yes`, then still refuses Café Fausse and AEA stack names and any database mode other than `create`. It deploys only after you type the stack name and `deploy`.
 
 ## What synth creates
 
-- New VPC `10.20.0.0/16`, one NAT gateway, private subnets for the future AgentCore ENIs, and isolated subnets for Aurora.
-- Aurora PostgreSQL 17.4 Serverless v2 (0.5–2 ACU), encrypted, IAM auth, database `quantic_hr`, secret `quantic-hr-agent/dev/database/admin`.
-- SSM admin host (`t4g.nano`) in a private subnet. Its AMI is an SSM parameter resolved at deploy time.
-- Runtime role `quantic-hr-agent-dev-runtime`, scoped to the selected Bedrock models, `rds-db:connect` as `quantic_hr_agent`, and one log group.
-- AgentCore runtime `QuanticHelloWorld` (`networkMode=VPC`, HTTP `/ping` and `/invocations`). Direct code deploy of `runtime/hello_world`. No model or database call.
+- New VPC `10.20.0.0/16` with two isolated subnets. No NAT gateway, internet gateway, public subnet, VPC endpoint, or peering connection.
+- Aurora PostgreSQL 17.4 Serverless v2, 0–2 ACU, automatic pause after 300 seconds. Storage encryption uses the AWS-managed RDS key. Deletion protection is on. The cluster is not publicly accessible.
+- Empty database `quantic_hr_agent` and a generated admin secret `quantic-hr-agent/dev/database/admin`. No schema, extension, table, or application role is applied.
+- The database security group has no inbound rule. Nothing can connect until a later change adds one.
 
-SQL under `database/migrations/` is not applied here. The first live session, after approval, is still a read-only check of `pg_available_extensions` before `CREATE EXTENSION vector`.
+SQL under `database/migrations/` is not applied by this stack. `database/scripts/create-quantic-db.sh` refuses to run so it cannot target Café Fausse.
 
-## Network and MCP
+## Recurring charges if this stack is deployed
 
-AgentCore VPC mode places ENIs in the private subnets. Inbound `InvokeAgentRuntime` stays on the public AgentCore endpoint and does not enter this VPC. Aurora accepts TCP 5432 only from the runtime security group and the admin host.
+US East (Ohio) public price list, checked 3 Nov 2026. Aurora rates are from the RDS offer published 2026-10-29. Secrets Manager rates are from the offer published 2026-09-11. These are list prices before tax or credits.
 
-One NAT is the path to Bedrock. AWS documents that a public subnet does not give those ENIs internet access, and that a runtime without internet needs ECR, S3, and CloudWatch endpoints. Adding Bedrock interface endpoints on top of that set costs more than one NAT and was not proven without a live runtime. NAT is about $33 per month plus data while the stack exists. Aurora and the admin host cost money only while they are running. Interface endpoints remain the fallback if NAT is rejected before deploy.
+- Aurora PostgreSQL Serverless v2, Standard: $0.12 per ACU-hour. At 0 ACU the compute charge is $0. A continuous 0.5 ACU floor would be about $43.80 per month; this template does not set that floor.
+- Aurora Standard storage: $0.10 per consumed GB-month. I/O: $0.20 per million requests. Backup storage beyond the included amount: $0.021 per GB-month. Retention is 1 day. The template does not select I/O-Optimized storage.
+- One Secrets Manager secret: $0.40 per month, plus $0.05 per 10,000 API requests.
+- VPC, subnets, route tables, the security group, and the subnet group have no hourly charge. There is no NAT gateway, public IPv4 address, interface endpoint, EC2 instance, customer-managed KMS key, or AgentCore runtime in the template.
 
-The MCP server stays in the same runtime package and speaks stdio to the LangGraph process. AgentCore's own MCP protocol is streamable HTTP, which would make this runtime a second host. Stdio avoids that. Whether `direct_code_deploy` can spawn that child process is unverified until a runtime exists; container packaging is the fallback. No Gateway and no second MCP service are in this stack.
+An idle paused cluster therefore bills the secret plus whatever storage Aurora records for the empty volume. The exact starting volume size is known only after creation. NAT, which this stack does not create, is a separate charge of about $0.045 per hour.
 
-Availability zone names `us-east-2a` and `us-east-2b` are pinned so synth stays offline. `cdk.context.json` lists those names only to satisfy the CDK subset check. It is not a live inventory. Before deploy, confirm the names are `use2-az1` and `use2-az2`. AgentCore rejects other zone IDs in `us-east-2`.
-
-## Later pipeline
-
-This workflow only builds, tests, and synthesizes the CDK app. It has no AWS credentials. Later gates, still on this workflow and still blocked on tests:
-
-1. FastAPI BFF and Vite UI checks, then Render deploy of the BFF. Render stays the host.
-2. AgentCore runtime configuration using the stack outputs `RuntimeSubnetIds`, `RuntimeSecurityGroupId`, and `RuntimeRoleArn`.
-3. Migration and smoke checks against the new cluster only.
+Availability zone names `us-east-2a` and `us-east-2b` are pinned so synth stays offline. `cdk.context.json` is not a live inventory.
 
 Do not bootstrap a second toolkit. Step 0 already found CDKToolkit in this account and region.

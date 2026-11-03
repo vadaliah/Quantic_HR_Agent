@@ -8,7 +8,7 @@ const app = new cdk.App();
 
 new QuanticHrAgentStack(app, quanticConfig.stackName, {
   description:
-    'Quantic baseline: VPC, IAM, AgentCore Hello World, and either a new Aurora or a read-only reference to Café Fausse Aurora. Does not update Café Fausse or AEA stacks.',
+    'Independent Quantic Aurora PostgreSQL database. Private subnets only. Does not create a NAT gateway or AgentCore runtime, and does not update Café Fausse or AEA stacks.',
   env: {
     account: quanticConfig.account,
     region: quanticConfig.region,

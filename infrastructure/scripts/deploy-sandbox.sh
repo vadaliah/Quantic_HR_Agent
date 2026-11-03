@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Guarded deploy. Do not run until the Step 1B change set is explicitly approved.
+# Guarded deploy for the database-only Quantic Aurora stack.
+# Do not run until the synthesized change set and its monthly cost are approved.
 set -euo pipefail
 
 # Require explicit, per-session approval before *any* cloud deployment step.
@@ -22,6 +23,16 @@ case "$QUANTIC_STACK_NAME" in
     exit 1
     ;;
 esac
+
+if [[ "${QUANTIC_DATABASE_MODE:-create}" != "create" ]]; then
+  echo "ERROR: Refusing database mode ${QUANTIC_DATABASE_MODE}. Café Fausse and AEA stay untouched."
+  exit 1
+fi
+
+if [[ "${QUANTIC_DEPLOYMENT_SCOPE:-database-only}" != "database-only" ]]; then
+  echo "ERROR: Refusing deployment scope ${QUANTIC_DEPLOYMENT_SCOPE}. This deploy is the Aurora database only."
+  exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INFRA_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -58,9 +69,10 @@ echo "  project : $QUANTIC_PROJECT"
 echo "  stack   : $QUANTIC_STACK_NAME"
 echo "  account : $ACCOUNT"
 echo "  region  : $AWS_REGION"
-echo "  database mode: ${QUANTIC_DATABASE_MODE:-create}"
-echo "  database: quantic_hr (create) or existing Café cluster (reuse-cafe-fausse)"
-echo "  secret  : quantic-hr-agent/dev/database/admin (create mode only)"
+echo "  deployment scope: database-only"
+echo "  database: quantic_hr_agent on a new Aurora PostgreSQL 17.4 cluster"
+echo "  secret  : quantic-hr-agent/dev/database/admin"
+echo "  excluded: NAT gateway, AgentCore runtime, admin host, Café Fausse, AEA"
 echo "  profile : $AWS_PROFILE"
 echo
 echo "Blocked stacks: CafeFausseApplicationStack, AeaSandboxStack"
@@ -72,7 +84,10 @@ if [[ "$reply" != "$QUANTIC_STACK_NAME" ]]; then
   exit 1
 fi
 
-CDK_DATABASE_CONTEXT=(-c "quanticDatabaseMode=${QUANTIC_DATABASE_MODE:-create}")
+CDK_DATABASE_CONTEXT=(
+  -c "quanticDatabaseMode=create"
+  -c "quanticDeploymentScope=database-only"
+)
 
 npx aws-cdk diff --profile "$AWS_PROFILE" "${CDK_DATABASE_CONTEXT[@]}"
 read -r -p "Apply the diff above? Type deploy to continue: " confirm
