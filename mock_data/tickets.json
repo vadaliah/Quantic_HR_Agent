@@ -1,0 +1,6 @@
+{
+  "synthetic": true,
+  "as_of": "2026-11-03",
+  "_comment": "Starts empty. create_mock_hr_ticket inserts only with confirm=true.",
+  "tickets": []
+}
