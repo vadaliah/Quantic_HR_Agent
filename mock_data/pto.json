@@ -1,0 +1,43 @@
+{
+  "synthetic": true,
+  "as_of": "2026-11-03",
+  "_comment": "Accrual state only. Balance is computed live by pto_balance_as_of() (migration 004).",
+  "policy_refs": ["POL-001 2.1", "POL-001 2.2", "POL-001 3.1", "POL-001 4.1"],
+  "notice_business_days": 5,
+  "manager_approval_threshold_days": 3,
+  "carryover_cap_days": 5,
+  "blackout_periods": [
+    {"label": "Q1 close", "start": [3, 27], "end": [3, 31]},
+    {"label": "Q2 close", "start": [6, 26], "end": [6, 30]},
+    {"label": "Q3 close", "start": [9, 26], "end": [9, 30]},
+    {"label": "Q4 close", "start": [12, 27], "end": [12, 31]},
+    {"label": "All-hands week", "start": [10, 5], "end": [10, 9]}
+  ],
+  "balances": [
+    {"employee_id": "E1001", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 5.0, "taken_days_this_year": 9.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1002", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 4.0, "taken_days_this_year": 12.5, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1003", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 2.0, "taken_days_this_year": 3.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1004", "plan": "NOT_ELIGIBLE", "accrual_days_per_month": 0.0, "carryover_days": 0, "taken_days_this_year": 0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1005", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 5.0, "taken_days_this_year": 14.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1006", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 3.0, "taken_days_this_year": 6.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1007", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 2.0, "taken_days_this_year": 4.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1008", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 5.0, "taken_days_this_year": 2.5, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1009", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 0.0, "taken_days_this_year": 8.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1010", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 4.5, "taken_days_this_year": 5.5, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1011", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 1.0, "taken_days_this_year": 2.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1012", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 2.0, "taken_days_this_year": 1.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1013", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 0.0, "taken_days_this_year": 8.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1014", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 5.0, "taken_days_this_year": 7.0, "pending_days": 1.0, "balance_year": 2026},
+    {"employee_id": "E1015", "plan": "PART_TIME_PRORATED", "accrual_days_per_month": 0.75, "carryover_days": 1.0, "taken_days_this_year": 3.5, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1016", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 3.0, "taken_days_this_year": 9.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1017", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 0.0, "taken_days_this_year": 4.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1018", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 2.0, "taken_days_this_year": 11.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1019", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 0.0, "taken_days_this_year": 11.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1020", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 1.0, "taken_days_this_year": 1.5, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1021", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 0.0, "taken_days_this_year": 0.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1022", "plan": "NOT_ELIGIBLE", "accrual_days_per_month": 0.0, "carryover_days": 0, "taken_days_this_year": 0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1023", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 4.0, "taken_days_this_year": 6.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1024", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 2.5, "taken_days_this_year": 5.0, "pending_days": 0, "balance_year": 2026},
+    {"employee_id": "E1025", "plan": "FULL_TIME_STANDARD", "accrual_days_per_month": 1.25, "carryover_days": 5.0, "taken_days_this_year": 13.0, "pending_days": 0, "balance_year": 2026}
+  ]
+}

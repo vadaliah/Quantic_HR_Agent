@@ -1,0 +1,18 @@
+{
+  "synthetic": true,
+  "as_of": "2026-11-03",
+  "_comment": "Work locations referenced by employees.location_id.",
+  "locations": [
+    {"location_id": "IE-DUBLIN", "name": "Dublin", "region": "Dublin", "country": "IE", "remote_eligible": false},
+    {"location_id": "US-CA", "name": "San Francisco", "region": "CA", "country": "US", "remote_eligible": true},
+    {"location_id": "US-CO", "name": "Denver", "region": "CO", "country": "US", "remote_eligible": true},
+    {"location_id": "US-FL", "name": "Miami", "region": "FL", "country": "US", "remote_eligible": true},
+    {"location_id": "US-GA", "name": "Atlanta", "region": "GA", "country": "US", "remote_eligible": true},
+    {"location_id": "US-IL", "name": "Chicago", "region": "IL", "country": "US", "remote_eligible": true},
+    {"location_id": "US-MA", "name": "Boston", "region": "MA", "country": "US", "remote_eligible": true},
+    {"location_id": "US-NJ", "name": "Jersey City", "region": "NJ", "country": "US", "remote_eligible": true},
+    {"location_id": "US-NY", "name": "New York Office", "region": "NY", "country": "US", "remote_eligible": true},
+    {"location_id": "US-TX", "name": "Austin", "region": "TX", "country": "US", "remote_eligible": true},
+    {"location_id": "US-WA", "name": "Seattle", "region": "WA", "country": "US", "remote_eligible": true}
+  ]
+}
