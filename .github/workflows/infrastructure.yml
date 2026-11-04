@@ -16,6 +16,9 @@ jobs:
       - run: python -m unittest discover -s infrastructure/database/scripts -p 'test_*.py'
       - name: Install Claude Code
         uses: pleaseai/setup-claude-code@v1.1.4
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
 
   cdk:
     runs-on: ubuntu-latest
