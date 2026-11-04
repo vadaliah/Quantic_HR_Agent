@@ -6,8 +6,8 @@ Agentic RAG + MCP project for Quantic AI Engineering Techniques and Architecture
 
 There is **no local database**. All tables, seed data and vector search live in the deployed
 Aurora Serverless v2 PostgreSQL cluster, reached through the RDS Data API for DDL/DML and a
-private connection for the application. Local Postgres scripts and `docker-compose.yml` were
-removed so there is one source of truth.
+private connection for the application. Local Postgres scripts, the local schema/seed files and
+`docker-compose.yml` were removed so there is one source of truth.
 
 | Piece | Where it runs |
 | --- | --- |
@@ -20,11 +20,11 @@ removed so there is one source of truth.
 Vite (5173) → FastAPI /chat /health → LangGraph → stdio MCP → Aurora + pgvector
 ```
 
-## Database setup (run once, then after schema changes)
+## Database setup
 
 Migrations and seeds run through the guarded RDS Data API runner. It opens its own
-transaction, uses the admin secret, verifies the account/region/cluster before doing anything,
-and prompts for a typed confirmation.
+transaction, uses the admin secret, verifies the account, region and cluster before doing
+anything, and prompts for a typed confirmation.
 
 ```bash
 # 1. Parse-check offline first (no AWS call)
@@ -45,9 +45,9 @@ always use the admin secret.
 
 ## Corpus ingestion (RAG)
 
-`corpus/` holds 16 policy documents (~8,200 words). Vector search runs only against Aurora;
-there is no local index, so policy questions return "no matching passage" until ingestion
-has run.
+`corpus/` holds 16 policy documents (~8,200 words). Vector search runs only against Aurora.
+Until ingestion has run, `policy_chunks` is empty and policy questions return
+"no matching passage" — that is the correct answer against an empty index, not a bug.
 
 ```bash
 export DATABASE_URL=postgresql://quantic_hr_admin:<pw>@<cluster-endpoint>:5432/quantic_hr_agent
@@ -57,14 +57,14 @@ python scripts/ingest_corpus.py             # embed with Titan and write policy_
 
 `--dry-run` reports 16 documents and 177 chunks without contacting AWS. Embedding the whole
 corpus is about 9,600 tokens, roughly three cents, one time. Chunk IDs are content hashes, so
-re-running overwrites rather than duplicating. `--force` re-embeds everything.
+re-running overwrites rather than duplicating; `--force` re-embeds everything.
 
-Ingestion needs a direct Postgres connection, which the Data API cannot provide, because
-embeddings must be computed by Bedrock before the SQL is written.
+Ingestion needs a direct Postgres connection because the embeddings must be computed by
+Bedrock before the SQL is written, which the Data API cannot do on its own.
 
 ## Running the app
 
-The application needs only `DATABASE_URL` and AWS credentials for Bedrock.
+The application needs `DATABASE_URL` and AWS credentials for Bedrock.
 
 ```bash
 uv sync --group dev
@@ -83,17 +83,17 @@ npm --prefix frontend run dev
 uv run pytest -q
 ```
 
-Tests that touch the database require `DATABASE_URL` pointing at Aurora. Tool-discovery tests
-for the MCP server and the chunking dry run need no AWS contact.
+Tests that touch the database require `DATABASE_URL` pointing at Aurora. MCP tool-discovery
+tests need no AWS contact.
 
 ## Demo workflows
 
 1. **Remote work from abroad** — `E1007` asks about working from Portugal for six weeks.
-   Expected: over 30 days triggers People Operations and Legal approval (POL-004 2.2), with
-   security conditions from POL-006 and the approval path from POL-003 4.3.
-2. **PTO request** — `E1012` asks about three days next week. Expected: balance covers it
-   (POL-001 2.1), three days needs manager approval (POL-001 3.1), five business days' notice.
-   `E1019` is the insufficient-balance path.
+   Over 30 consecutive days triggers People Operations and Legal approval (POL-004 2.2), with
+   security conditions from POL-006 3.3 and the approval path from POL-003 4.3.
+2. **PTO request** — `E1012` asks about three days next week. The balance covers it
+   (POL-001 2.1), three days or more needs manager approval (POL-001 3.1), and five business
+   days' notice applies. `E1019` is the insufficient-balance path.
 
 ## AWS CDK (synth only)
 
