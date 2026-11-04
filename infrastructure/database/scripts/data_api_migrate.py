@@ -191,10 +191,10 @@ def main() -> int:
         for i, statement in enumerate(statements, 1):
             aws("rds-data", "execute-statement", *options, "--transaction-id", tx, "--sql", statement)
             print(f"  [{i}/{len(statements)}] completed")
-        aws("rds-data", "commit-transaction", *options, "--transaction-id", tx)
+        aws("rds-data", "commit-transaction", "--resource-arn", cluster_arn, "--secret-arn", secret_arn, "--transaction-id", tx)
     except BaseException:
         try:
-            aws("rds-data", "rollback-transaction", *options, "--transaction-id", tx)
+            aws("rds-data", "rollback-transaction", "--resource-arn", cluster_arn, "--secret-arn", secret_arn, "--transaction-id", tx)
             print("Migration failed; rollback requested.", file=sys.stderr)
         except Exception as rollback_error:
             print(f"Rollback status unknown: {rollback_error}", file=sys.stderr)
