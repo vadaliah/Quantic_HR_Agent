@@ -10,7 +10,7 @@ END
 $$;
 
 GRANT rds_iam TO quantic_hr_agent;
-GRANT CONNECT ON DATABASE quantic_hr TO quantic_hr_agent;
+GRANT CONNECT ON DATABASE quantic_hr_agent TO quantic_hr_agent;
 GRANT USAGE ON SCHEMA public TO quantic_hr_agent;
 GRANT SELECT, INSERT, UPDATE ON
   locations,
