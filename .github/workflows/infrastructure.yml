@@ -14,6 +14,8 @@ jobs:
           python-version: "3.12"
       - run: python -m unittest discover -s runtime/hello_world -p 'test_*.py'
       - run: python -m unittest discover -s infrastructure/database/scripts -p 'test_*.py'
+      - name: Install Claude Code
+        uses: pleaseai/setup-claude-code@v1.1.4
 
   cdk:
     runs-on: ubuntu-latest
