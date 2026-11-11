@@ -13,3 +13,20 @@ __pycache__/
 *.egg-info/
 frontend/dist/
 frontend/node_modules/
+
+# IDE and local artifacts
+.idea/
+.vscode/
+*.bak
+
+# generated corpus vectors; regenerate with scripts/ingest_corpus.py
+infrastructure/database/migrations/008_policy_vectors.sql
+
+# runtime state
+.run/
+
+# runtime state
+.run/
+
+# runtime state
+.run/
