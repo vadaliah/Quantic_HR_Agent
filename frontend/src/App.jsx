@@ -1,72 +1,499 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const API = import.meta.env.VITE_API_URL || "http" + "://127.0.0.1" + ":8000";
 
-export default function App() {
-  const [employeeId, setEmployeeId] = useState("E001");
-  const [message, setMessage] = useState("Can I work remotely from another state?");
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState("");
+const EMPLOYEES = [
+  { id: "E1007", label: "E1007 — remote-eligible, NY" },
+  { id: "E1012", label: "E1012 — ample PTO" },
+  { id: "E1019", label: "E1019 — low PTO" },
+  { id: "E1024", label: "E1024 — on-site role" },
+];
 
-  async function onSubmit(event) {
-    event.preventDefault();
-    setError("");
-    const response = await fetch(`${API}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, employee_id: employeeId }),
-    });
-    if (!response.ok) {
-      setError(`BFF error ${response.status}`);
-      return;
-    }
-    setResult(await response.json());
+const DEMOS = [
+  { label: "Remote work abroad", employee: "E1007", message: "Can I work from Portugal for six weeks?" },
+  { label: "PTO request", employee: "E1012", message: "Can I take 3 days of PTO next week?" },
+  { label: "Office chair, $1500", employee: "E1007", message: "I want to buy an office chair for $1500, what does the policy say?" },
+];
+
+const S = {
+  page: {
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+    maxWidth: 1280, margin: "0 auto", padding: "0 24px 190px",
+    color: "#0f172a", background: "#eef2f7", minHeight: "100vh",
+  },
+  label: {
+    fontSize: 10.5, fontWeight: 800, letterSpacing: ".1em",
+    textTransform: "uppercase",
+  },
+  mono: {
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+    fontSize: 12, color: "#1e293b", wordBreak: "break-word",
+  },
+  pre: { whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0 },
+};
+
+const ACCENT = {
+  path:     { solid: "#1d4ed8", soft: "#e0ecff", border: "#93b8f7" },
+  tools:    { solid: "#6d28d9", soft: "#efe6ff", border: "#c4a9f7" },
+  evidence: { solid: "#047857", soft: "#dcfce9", border: "#8fd9b8" },
+};
+
+/* A panel that reads as a physical card: thick accent edge, heavy border,
+   offset shadow. The accent colour is the panel's identity. */
+function Panel({ title, count, accent, children }) {
+  return (
+    <section style={{
+      background: "#fff",
+      border: "2px solid #cbd5e1",
+      borderTop: `4px solid ${accent.solid}`,
+      borderRadius: 14,
+      boxShadow: `6px 6px 0 0 ${accent.soft}, 0 10px 28px -14px rgba(15,23,42,.35)`,
+      overflow: "hidden",
+      display: "flex", flexDirection: "column",
+    }}>
+      <header style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "11px 15px",
+        background: accent.soft,
+        borderBottom: `2px solid ${accent.border}`,
+      }}>
+        <span style={{ ...S.label, color: accent.solid }}>{title}</span>
+        {count !== undefined && (
+          <span style={{
+            fontSize: 11.5, fontWeight: 800, color: "#fff",
+            background: accent.solid, borderRadius: 999, padding: "2px 10px",
+          }}>
+            {count}
+          </span>
+        )}
+      </header>
+      <div style={{ padding: 15, flex: 1 }}>{children}</div>
+    </section>
+  );
+}
+
+function Chip({ kind }) {
+  const tones = {
+    tool_call:     ["#ede9fe", "#5b21b6", "#c4b5fd"],
+    decision:      ["#d1fae5", "#065f46", "#6ee7b7"],
+    escalation:    ["#fee2e2", "#991b1b", "#fca5a5"],
+    confirmation:  ["#fef3c7", "#92400e", "#fcd34d"],
+    clarification: ["#fef3c7", "#92400e", "#fcd34d"],
+  };
+  const [bg, fg, border] = tones[kind] || tones.tool_call;
+  return (
+    <span style={{
+      background: bg, color: fg, border: `2px solid ${border}`,
+      padding: "2px 9px", borderRadius: 999, fontSize: 10,
+      fontWeight: 800, textTransform: "uppercase", letterSpacing: ".07em",
+    }}>
+      {kind.replace("_", " ")}
+    </span>
+  );
+}
+
+function ResultHeadline({ turn }) {
+  const decision = (turn.steps || []).find((s) => s.kind === "decision");
+  if (!decision) {
+    return <div style={{ fontSize: 16, ...S.pre }}>{turn.answer}</div>;
+  }
+  const tone = turn.escalation
+    ? { band: "#fee2e2", edge: "#b91c1c", text: "#7f1d1d" }
+    : { band: "#d1fae5", edge: "#047857", text: "#065f46" };
+
+  return (
+    <div style={{
+      background: tone.band,
+      border: `3px solid ${tone.edge}`,
+      borderRadius: 12,
+      padding: "18px 20px",
+      boxShadow: "0 8px 24px -12px rgba(15,23,42,.30)",
+    }}>
+      <div style={{
+        fontSize: 27, fontWeight: 900, letterSpacing: "-.02em",
+        color: tone.text, lineHeight: 1.15,
+      }}>
+        {decision.detail}
+      </div>
+      {decision.reason && (
+        <div style={{ fontSize: 14.5, color: "#334155", marginTop: 9,
+                      fontWeight: 500 }}>
+          {decision.reason}
+        </div>
+      )}
+      {(decision.policy_refs || []).length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 13 }}>
+          {decision.policy_refs.map((ref) => (
+            <span key={ref} style={{
+              ...S.mono, fontSize: 12, fontWeight: 700,
+              background: "#fff", border: `2px solid ${tone.edge}`,
+              borderRadius: 8, padding: "3px 9px", color: tone.text,
+            }}>
+              {ref}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Tool calls and decisions only. The model's own narration is deliberately not
+   rendered: it is unverified, and it has stated policy obligations that do not
+   exist in the corpus. Everything shown here is built from tool output. */
+function DecisionPath({ turn }) {
+  const visible = (turn.steps || []).filter(
+    (s) => ["tool_call", "decision", "escalation", "clarification", "confirmation"]
+             .includes(s.kind)
+  );
+
+  if (!visible.length) {
+    return <em style={{ fontSize: 13, color: "#94a3b8" }}>No steps recorded.</em>;
   }
 
   return (
-    <main style={{ fontFamily: "sans-serif", maxWidth: 720, margin: "2rem auto" }}>
-      <h1>Quantic HR Agent</h1>
-      <p>Local MCP + LangGraph. No AWS resources are used.</p>
-      <form onSubmit={onSubmit}>
-        <label>
-          Employee
-          <select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
-            <option value="E001">E001 Amina Cole (NY, remote-eligible)</option>
-            <option value="E002">E002 Ben Ortiz (OH, not remote-eligible)</option>
-          </select>
-        </label>
-        <textarea
-          rows={3}
-          value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          style={{ width: "100%", marginTop: 12 }}
-        />
-        <button type="submit">Ask</button>
-      </form>
-      {error && <p>{error}</p>}
-      {result && (
-        <section>
-          <h2>Answer</h2>
-          <pre>{result.answer}</pre>
-          <h3>Tool trace</h3>
-          <ul>
-            {(result.tool_trace || []).map((item, index) => (
-              <li key={index}>
-                <strong>{item.name}</strong> {JSON.stringify(item.arguments)}
-                <div>{item.output_summary}</div>
-              </li>
-            ))}
-          </ul>
-          <h3>Citations</h3>
-          <ul>
-            {(result.citations || []).map((item, index) => (
-              <li key={index}>
-                {item.title} ({item.document_id}#{item.section_id})
-              </li>
-            ))}
-          </ul>
-        </section>
+    <ol style={{ margin: 0, paddingLeft: 20 }}>
+      {visible.map((step, i) => (
+        <li key={i} style={{ marginBottom: 14, fontSize: 13.5 }}>
+          <Chip kind={step.kind} />
+          {step.kind === "tool_call" && (
+            <>
+              <code style={{ fontWeight: 800, marginLeft: 7, color: "#6d28d9",
+                             fontSize: 13.5 }}>
+                {step.tool}
+              </code>
+              <div style={{
+                ...S.mono, marginTop: 6, background: "#faf5ff",
+                border: "2px solid #ddd6fe", borderRadius: 8, padding: "7px 9px",
+              }}>
+                {JSON.stringify(step.arguments)}
+              </div>
+            </>
+          )}
+          {step.kind !== "tool_call" && (
+            <div style={{ marginTop: 6 }}>
+              <strong style={{ fontSize: 14 }}>{step.detail}</strong>
+              {step.reason && (
+                <div style={{ color: "#475569", marginTop: 2 }}>{step.reason}</div>
+              )}
+            </div>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function ToolCalls({ turn }) {
+  const trace = turn.tool_trace || [];
+  if (!trace.length) {
+    return <em style={{ fontSize: 13, color: "#94a3b8" }}>No tools were called.</em>;
+  }
+  return trace.map((t, i) => (
+    <div key={i} style={{
+      borderTop: i ? "2px dashed #e2e8f0" : "none",
+      paddingTop: i ? 14 : 0, marginTop: i ? 14 : 0,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <code style={{ fontWeight: 800, fontSize: 13.5, color: "#6d28d9" }}>{t.name}</code>
+        {t.iteration !== undefined && (
+          <span style={{
+            fontSize: 10.5, fontWeight: 800, color: "#fff",
+            background: "#6d28d9", borderRadius: 6, padding: "1px 7px",
+          }}>
+            iter {t.iteration}
+          </span>
+        )}
+      </div>
+      <div style={{
+        ...S.mono, marginTop: 6, background: "#faf5ff",
+        border: "2px solid #ddd6fe", borderRadius: 8, padding: "7px 9px",
+      }}>
+        {JSON.stringify(t.arguments)}
+      </div>
+      <div style={{ ...S.mono, color: "#64748b", marginTop: 7 }}>
+        {String(t.output_summary).slice(0, 200)}
+      </div>
+    </div>
+  ));
+}
+
+function Citations({ turn }) {
+  const cites = turn.citations || [];
+  if (!cites.length) {
+    return <em style={{ fontSize: 13, color: "#94a3b8" }}>No passages retrieved.</em>;
+  }
+  return cites.map((c, i) => (
+    <div key={i} style={{
+      borderTop: i ? "2px dashed #e2e8f0" : "none",
+      paddingTop: i ? 14 : 0, marginTop: i ? 14 : 0,
+    }}>
+      <div style={{ display: "flex", alignItems: "baseline",
+                    justifyContent: "space-between", gap: 8 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 800, color: "#047857" }}>
+          {c.document_id} §{c.section_id}
+        </span>
+        {typeof c.score === "number" && (
+          <span style={{
+            ...S.mono, fontSize: 11, fontWeight: 700, color: "#fff",
+            background: "#047857", borderRadius: 6, padding: "2px 8px",
+          }}>
+            {c.score.toFixed(3)}
+          </span>
+        )}
+      </div>
+      <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>{c.title}</div>
+      <div style={{
+        fontSize: 12, color: "#1e293b", marginTop: 8, ...S.pre,
+        background: "#f8fafc", border: "2px solid #e2e8f0",
+        borderRadius: 8, padding: "9px 11px",
+      }}>
+        {(c.snippet || "").slice(0, 260)}
+      </div>
+    </div>
+  ));
+}
+
+function Turn({ turn, expanded, onToggle }) {
+  const escalation = (turn.steps || []).find((s) => s.kind === "escalation");
+  const needsPreApproval = (turn.steps || []).some(
+    (s) => s.kind === "decision" && s.detail === "NEEDS_PRE_APPROVAL"
+  );
+
+  return (
+    <article style={{ marginBottom: expanded ? 42 : 22 }}>
+      <div
+        onClick={onToggle}
+        style={{
+          background: "#fff", borderRadius: 12,
+          border: "2px solid #cbd5e1", borderLeft: "6px solid #64748b",
+          boxShadow: "0 6px 18px -12px rgba(15,23,42,.4)",
+          padding: "14px 18px", marginBottom: 14, cursor: "pointer",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between",
+                      alignItems: "flex-start", gap: 12 }}>
+          <div>
+            <div style={{ ...S.label, color: "#64748b", marginBottom: 6 }}>
+              Question · {turn.employee_id}
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 700, ...S.pre }}>{turn.question}</div>
+          </div>
+          <span style={{ fontSize: 12, color: "#475569", whiteSpace: "nowrap",
+                         fontWeight: 800 }}>
+            {expanded ? "▲ collapse" : "▼ details"}
+          </span>
+        </div>
+      </div>
+
+      <div style={{
+        background: "#fff", borderRadius: 14, padding: "18px 20px",
+        border: `2px solid ${turn.escalation ? "#fca5a5" : "#6ee7b7"}`,
+        borderLeft: `6px solid ${turn.escalation ? "#b91c1c" : "#047857"}`,
+        boxShadow: "0 12px 34px -18px rgba(15,23,42,.45)",
+      }}>
+        <div style={{ ...S.label, color: "#64748b", marginBottom: 12 }}>Result</div>
+        <ResultHeadline turn={turn} />
+
+        {escalation && (
+          <div style={{
+            background: "#fee2e2", border: "2px solid #fca5a5", borderRadius: 10,
+            padding: "12px 14px", marginTop: 16, fontSize: 14, color: "#7f1d1d",
+            fontWeight: 600,
+          }}>
+            <strong>Escalation.</strong> {escalation.detail}
+          </div>
+        )}
+        {turn.needs_clarification && (
+          <div style={{
+            background: "#fef3c7", border: "2px solid #fcd34d", borderRadius: 10,
+            padding: "12px 14px", marginTop: 16, fontSize: 14, color: "#78350f",
+            fontWeight: 600,
+          }}>
+            <strong>Clarification needed.</strong> {turn.answer}
+          </div>
+        )}
+        {needsPreApproval && (
+          <div style={{ fontSize: 13, color: "#475569", marginTop: 14, fontWeight: 500 }}>
+            Ask a follow-up to compare, for example “what if it were $500 instead?”
+          </div>
+        )}
+      </div>
+
+      {expanded && (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+          gap: 20, marginTop: 20, alignItems: "start",
+        }}>
+          <Panel title="Decision path" count={(turn.steps || []).length}
+                 accent={ACCENT.path}>
+            <DecisionPath turn={turn} />
+          </Panel>
+          <Panel title="MCP tool calls" count={(turn.tool_trace || []).length}
+                 accent={ACCENT.tools}>
+            <ToolCalls turn={turn} />
+          </Panel>
+          <Panel title="Policy citations" count={(turn.citations || []).length}
+                 accent={ACCENT.evidence}>
+            <Citations turn={turn} />
+          </Panel>
+        </div>
       )}
-    </main>
+    </article>
+  );
+}
+
+export default function App() {
+  const [employeeId, setEmployeeId] = useState("E1007");
+  const [message, setMessage] = useState("Can I work from Portugal for six weeks?");
+  const [turns, setTurns] = useState([]);
+  const [threadId, setThreadId] = useState(null);
+  const [openTurn, setOpenTurn] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function ask(question, employee) {
+    if (!question.trim() || busy) return;
+    setError("");
+    setBusy(true);
+    try {
+      const response = await fetch(`${API}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: question, employee_id: employee, thread_id: threadId }),
+      });
+      if (!response.ok) {
+        setError(`BFF error ${response.status}`);
+        return;
+      }
+      const turn = await response.json();
+      setThreadId(turn.thread_id);
+      setTurns((prev) => {
+        const next = [...prev, turn].slice(-6);
+        setOpenTurn(next.length - 1);
+        return next;
+      });
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={S.page}>
+      <header style={{
+        position: "sticky", top: 0, zIndex: 10,
+        background: "rgba(238,242,247,.94)", backdropFilter: "blur(10px)",
+        paddingTop: 24, paddingBottom: 16, marginBottom: 10,
+        borderBottom: "3px solid #cbd5e1",
+      }}>
+        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900,
+                     letterSpacing: "-.025em" }}>
+          Quantic HR Agent
+        </h1>
+        <p style={{ margin: "6px 0 16px", color: "#475569", fontSize: 13.5 }}>
+          Agentic RAG over Aurora pgvector, reached through MCP tools.
+          {threadId && (
+            <span style={{
+              ...S.mono, marginLeft: 10, fontSize: 11.5, fontWeight: 700,
+              background: "#fff", border: "2px solid #cbd5e1",
+              borderRadius: 7, padding: "2px 8px",
+            }}>
+              thread {threadId}
+            </span>
+          )}
+        </p>
+        <div style={{ display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
+          {DEMOS.map((d) => (
+            <button key={d.label} type="button" disabled={busy}
+              onClick={() => { setEmployeeId(d.employee); setMessage(d.message); ask(d.message, d.employee); }}
+              style={{
+                background: "#fff", border: "2px solid #94a3b8", borderRadius: 10,
+                padding: "7px 14px", fontSize: 13, fontWeight: 700, color: "#1e293b",
+                cursor: busy ? "not-allowed" : "pointer",
+                boxShadow: "0 3px 0 0 #cbd5e1",
+              }}>
+              {d.label}
+            </button>
+          ))}
+          {turns.length > 0 && (
+            <button type="button"
+              onClick={() => { setTurns([]); setThreadId(null); setOpenTurn(null); }}
+              style={{
+                background: "#fff", border: "2px solid #94a3b8", borderRadius: 10,
+                padding: "7px 14px", fontSize: 13, fontWeight: 700, color: "#475569",
+                cursor: "pointer", boxShadow: "0 3px 0 0 #cbd5e1",
+              }}>
+              New thread
+            </button>
+          )}
+          <label style={{ marginLeft: "auto", fontSize: 13, color: "#334155",
+                          fontWeight: 600 }}>
+            Employee{" "}
+            <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}
+              style={{ borderRadius: 9, border: "2px solid #94a3b8", padding: "6px 9px",
+                       fontSize: 13, fontWeight: 600, background: "#fff" }}>
+              {EMPLOYEES.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}
+            </select>
+          </label>
+        </div>
+      </header>
+
+      <main style={{ paddingTop: 32 }}>
+        {turns.length === 0 && (
+          <div style={{
+            color: "#64748b", fontSize: 14.5, textAlign: "center",
+            padding: "72px 24px", fontWeight: 500, lineHeight: 1.7,
+          }}>
+            Ask a question, or use a demo button above.
+          </div>
+        )}
+        {turns.map((turn, i) => (
+          <Turn key={i} turn={turn} index={i}
+                expanded={openTurn === i}
+                onToggle={() => setOpenTurn(openTurn === i ? null : i)} />
+        ))}
+      </main>
+
+      <form onSubmit={(e) => { e.preventDefault(); ask(message, employeeId); }}
+            style={{
+              position: "fixed", bottom: 0, left: 0, right: 0,
+              background: "rgba(255,255,255,.97)", backdropFilter: "blur(10px)",
+              borderTop: "3px solid #cbd5e1", padding: "16px 24px",
+              boxShadow: "0 -12px 30px -24px rgba(15,23,42,.5)",
+            }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", display: "flex", gap: 12 }}>
+          <textarea rows={2} value={message} autoComplete="off"
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(message, employeeId); } }}
+            placeholder={turns.length
+              ? "Ask a follow-up, e.g. “what if it were $500?”"
+              : "Ask about PTO, remote work, expenses or benefits…"}
+            style={{
+              flex: 1, padding: 12, fontFamily: "inherit", fontSize: 14.5,
+              borderRadius: 11, border: "2px solid #94a3b8", resize: "vertical",
+              background: "#fff", fontWeight: 500,
+            }} />
+          <button type="submit" disabled={busy}
+            style={{
+              padding: "0 26px", fontSize: 15, fontWeight: 800, borderRadius: 11,
+              border: "2px solid #0f766e", color: "#fff",
+              background: busy ? "#94a3b8" : "#0f766e",
+              cursor: busy ? "not-allowed" : "pointer",
+              boxShadow: busy ? "none" : "0 4px 0 0 #134e4a",
+            }}>
+            {busy ? "Working…" : "Ask"}
+          </button>
+        </div>
+        {error && (
+          <div style={{ maxWidth: 1280, margin: "10px auto 0", color: "#b91c1c",
+                        fontSize: 13.5, fontWeight: 700 }}>
+            {error}
+          </div>
+        )}
+      </form>
+    </div>
   );
 }
