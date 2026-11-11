@@ -1,0 +1,48 @@
+# Render Blueprint: the Quantic HR agent as ONE free web service (UI + API on
+# the same origin). AWS keeps only the EXISTING QuanticHrAgentStack Aurora
+# cluster (reached through the Aurora Data API over HTTPS) and Bedrock.
+# Do NOT run `cdk deploy` from this branch: see docs/DEPLOY_RENDER.md.
+services:
+  - type: web
+    name: quantic-hr-agent
+    runtime: docker
+    plan: free
+    region: ohio            # closest Render region to AWS us-east-2
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    healthCheckPath: /ping  # no DB or Bedrock call, so it never wakes Aurora
+    autoDeploy: false
+    envVars:
+      - key: AWS_REGION
+        value: us-east-2
+      # IAM user scoped by infrastructure/iam/render-app-policy.json.
+      # Set in the Render dashboard; never commit them.
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: DB_MODE
+        value: data_api
+      - key: DB_CLUSTER_ARN
+        value: arn:aws:rds:us-east-2:287238357427:cluster:quantichragentstack-databaseaurorapostgres6560ef93-h8yvdkzw8voy
+      - key: DB_SECRET_ARN
+        value: arn:aws:secretsmanager:us-east-2:287238357427:secret:quantic-hr-agent/dev/database/admin-e4lGu2
+      - key: DB_NAME
+        value: quantic_hr_agent
+      # Seconds to wait while the auto-paused Serverless v2 cluster resumes.
+      - key: DB_RESUME_WAIT_SECONDS
+        value: "60"
+      # Default chat model. Alternative: us.anthropic.claude-sonnet-4-6, which
+      # also needs the optional Sonnet statement in docs/DEPLOY_RENDER.md.
+      - key: CHAT_MODEL
+        value: us.amazon.nova-pro-v1:0
+      - key: BEDROCK_EMBEDDING_MODEL
+        value: amazon.titan-embed-text-v2:0
+      - key: QUANTIC_AGENT_MODE
+        value: auto
+      - key: QUANTIC_RETRIEVAL
+        value: auto
+      - key: QUANTIC_MIN_SIMILARITY
+        value: "0.2"
+      - key: QUANTIC_ALLOW_AWS_DEPLOY
+        value: "no"

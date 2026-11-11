@@ -1,6 +1,7 @@
 import { useState } from "react";
 
-const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+// Same origin in production (the API serves the built UI); the local API in `npm run dev`.
+const API = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
 
 export default function App() {
   const [employeeId, setEmployeeId] = useState("E1007");

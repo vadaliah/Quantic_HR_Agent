@@ -1,7 +1,12 @@
-"""FastAPI app: the BFF (/chat, /health) and the AgentCore Runtime HTTP contract.
+"""FastAPI app: the web UI, the BFF (/chat, /health) and a cheap /ping.
 
-AgentCore Runtime (HTTP protocol) calls POST /invocations and GET /ping on port
-8080; both are thin adapters over the same LangGraph agent as /chat.
+Deployment: one Render web service (render.yaml, Dockerfile.render) serves the
+built React UI from QUANTIC_STATIC_DIR at / and the API on the same origin,
+listening on $PORT. Render's health check uses /ping, which touches neither the
+database nor Bedrock, so it never wakes the auto-paused Aurora cluster.
+
+POST /invocations is the AgentCore Runtime HTTP contract. It is kept for the
+record but the AgentCore path is not used (see docs/DEPLOY_RENDER.md).
 """
 
 from __future__ import annotations
@@ -9,19 +14,31 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from pathlib import Path
+
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from quantic_hr import bedrock
 from quantic_hr.agent import DEFAULT_EMPLOYEE_ID, agent_mode, run_agent
-from quantic_hr.db import connection
+from quantic_hr.db import connection, db_mode
+
+LOCAL_UI_ORIGINS = ["http://127.0.0.1:5173", "http://localhost:5173"]
+
+
+def allowed_origins() -> list[str]:
+    """Vite dev origins plus ALLOWED_ORIGINS (comma-separated). Same-origin UI needs none."""
+    extra = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+    return LOCAL_UI_ORIGINS + extra
+
 
 app = FastAPI(title="Quantic HR BFF", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
-    allow_methods=["*"],
+    allow_origins=allowed_origins(),
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -48,7 +65,7 @@ def health() -> dict:
         "agent_mode": agent_mode(),
         "chat_model": bedrock.chat_model_id(),
         "embedding_model": bedrock.embedding_model_id(),
-        "database": {"ok": db_ok, "error": db_error},
+        "database": {"ok": db_ok, "mode": db_mode(), "error": db_error},
         "aws_deploy": os.environ.get("QUANTIC_ALLOW_AWS_DEPLOY", "no"),
     }
 
@@ -59,7 +76,7 @@ def chat(request: ChatRequest) -> dict:
 
 
 class InvocationRequest(BaseModel):
-    """AgentCore payload. ``prompt`` per the HTTP contract; ``message`` also accepted."""
+    """AgentCore payload (path kept but not used). ``prompt`` per the HTTP contract; ``message`` also accepted."""
 
     prompt: str | None = None
     message: str | None = None
@@ -68,7 +85,7 @@ class InvocationRequest(BaseModel):
 
 @app.get("/ping")
 def ping() -> dict:
-    """AgentCore health check. Cheap: no database or Bedrock call."""
+    """Liveness for Render (and AgentCore). Cheap: no database or Bedrock call."""
     return {"status": "Healthy"}
 
 
@@ -82,3 +99,15 @@ def invocations(
         raise HTTPException(status_code=400, detail="prompt is required")
     result = run_agent(text, request.employee_id)
     return {"response": result["answer"], "status": "success", "session_id": session_id, **result}
+
+
+def static_dir() -> Path | None:
+    """Built UI (frontend/dist) to serve at /, if present. Mounted last so API routes win."""
+    configured = os.environ.get("QUANTIC_STATIC_DIR")
+    path = Path(configured) if configured else Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    return path if (path / "index.html").is_file() else None
+
+
+_ui = static_dir()
+if _ui is not None:
+    app.mount("/", StaticFiles(directory=_ui, html=True), name="ui")

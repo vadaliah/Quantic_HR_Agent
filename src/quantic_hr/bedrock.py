@@ -44,7 +44,12 @@ def region() -> str:
 
 
 def chat_model_id() -> str:
-    return os.environ.get("BEDROCK_CHAT_INFERENCE_PROFILE") or DEFAULT_CHAT_INFERENCE_PROFILE
+    """BEDROCK_CHAT_INFERENCE_PROFILE, or CHAT_MODEL (the Render env name), else Nova Pro."""
+    return (
+        os.environ.get("BEDROCK_CHAT_INFERENCE_PROFILE")
+        or os.environ.get("CHAT_MODEL")
+        or DEFAULT_CHAT_INFERENCE_PROFILE
+    )
 
 
 def embedding_model_id() -> str:
