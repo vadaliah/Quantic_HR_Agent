@@ -1,4 +1,4 @@
-"""FastAPI BFF. Local only; does not call AgentCore or Bedrock."""
+"""FastAPI BFF. Calls the LangGraph agent (Bedrock Converse or keyword fallback); not AgentCore."""
 
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from quantic_hr.agent import DEFAULT_EMPLOYEE_ID, run_agent
+from quantic_hr import bedrock
+from quantic_hr.agent import DEFAULT_EMPLOYEE_ID, agent_mode, run_agent
 from quantic_hr.db import connection
 
 app = FastAPI(title="Quantic HR BFF", version="0.1.0")
@@ -39,6 +40,9 @@ def health() -> dict:
         "status": "ok" if db_ok else "degraded",
         "runtime": "local",
         "mcp": "stdio",
+        "agent_mode": agent_mode(),
+        "chat_model": bedrock.chat_model_id(),
+        "embedding_model": bedrock.embedding_model_id(),
         "database": {"ok": db_ok, "error": db_error},
         "aws_deploy": os.environ.get("QUANTIC_ALLOW_AWS_DEPLOY", "no"),
     }

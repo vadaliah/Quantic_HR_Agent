@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import io
 import json
 import math
@@ -30,7 +31,7 @@ class FakeBedrock:
     def converse(self, **request: Any) -> dict[str, Any]:
         if self.fail:
             raise ConnectionError("simulated Bedrock outage")
-        self.converse_calls.append(request)
+        self.converse_calls.append(copy.deepcopy(request))  # the agent keeps mutating messages
         return self.converse_responses.pop(0)
 
     def invoke_model(self, **request: Any) -> dict[str, Any]:

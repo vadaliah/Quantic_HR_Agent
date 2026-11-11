@@ -13,7 +13,10 @@ mcp = FastMCP("quantic-hr")
 
 @mcp.tool()
 def search_policy_documents(query: str, limit: int = 5) -> dict[str, Any]:
-    """Search the HR policy corpus (semantic, keyword fallback). Returns cited passages with document_id and section_id."""
+    """Search the HR policy corpus (semantic, keyword fallback).
+
+    Returns cited passages with document_id and section_id.
+    """
     return tools.search_policy_documents(query, limit)
 
 

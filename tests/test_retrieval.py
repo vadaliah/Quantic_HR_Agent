@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import psycopg
 import pytest
-
 from fakes import FakeBedrock, fake_vector
+
 from quantic_hr import bedrock, tools
 
 ROWS = [
@@ -21,7 +21,8 @@ def embedded_rows(database_url: str):
         )
         for index, (chunk_id, section, heading, content) in enumerate(ROWS):
             conn.execute(
-                "INSERT INTO policy_chunks (chunk_id, document_id, section_id, heading, content, embedding, chunk_index) "
+                "INSERT INTO policy_chunks "
+                "(chunk_id, document_id, section_id, heading, content, embedding, chunk_index) "
                 "VALUES (%s, 'POL-902', %s, %s, %s, %s::vector, %s)",
                 (chunk_id, section, heading, content, bedrock.vector_literal(fake_vector(content)), index),
             )
@@ -71,7 +72,9 @@ def test_vector_mode_raises_instead_of_falling_back(embedded_rows, monkeypatch: 
         bedrock.set_client(None)
 
 
-def test_keyword_fallback_matches_terms_of_a_question(policy_chunks_loaded: str, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_keyword_fallback_matches_terms_of_a_question(
+    policy_chunks_loaded: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("QUANTIC_RETRIEVAL", "keyword")
     result = tools.search_policy_documents("Can I work remote from another state?")
     assert result["retrieval"] == "keyword"

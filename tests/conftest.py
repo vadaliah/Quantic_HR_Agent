@@ -38,6 +38,7 @@ def database_url() -> str:
 os.environ.setdefault("QUANTIC_AS_OF", "2026-11-03")
 # Never reach Bedrock from tests by default; tests that need it inject a fake client.
 os.environ.setdefault("QUANTIC_RETRIEVAL", "keyword")
+os.environ.setdefault("QUANTIC_AGENT_MODE", "keyword")
 
 
 @pytest.fixture(scope="session")

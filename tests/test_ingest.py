@@ -5,8 +5,8 @@ from pathlib import Path
 
 import psycopg
 import pytest
-
 from fakes import FakeBedrock
+
 from quantic_hr import bedrock
 
 ROOT = Path(__file__).resolve().parents[1]

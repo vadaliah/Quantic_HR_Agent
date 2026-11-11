@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from fakes import FakeBedrock, final_text, tool_use
+
 from quantic_hr import bedrock
 
 
