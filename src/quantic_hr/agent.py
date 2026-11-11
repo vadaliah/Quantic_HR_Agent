@@ -18,6 +18,8 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 ROOT = Path(__file__).resolve().parents[2]
+# Seed data (mock_data/employees.json) uses E1001-E1025; E1007 is the remote-work demo.
+DEFAULT_EMPLOYEE_ID = "E1007"
 
 
 class AgentState(TypedDict, total=False):
@@ -43,7 +45,7 @@ def _plan(message: str, employee_id: str) -> list[dict[str, Any]]:
             calls.append(
                 {
                     "name": "check_policy_compliance",
-                    "arguments": {"employee_id": employee_id, "check_type": "pto", "requested_hours": 8},
+                    "arguments": {"employee_id": employee_id, "check_type": "pto", "requested_days": 1},
                 }
             )
         return calls
@@ -125,7 +127,7 @@ async def _run_mcp(calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def plan_node(state: AgentState) -> AgentState:
-    employee_id = state.get("employee_id") or "E001"
+    employee_id = state.get("employee_id") or DEFAULT_EMPLOYEE_ID
     return {
         **state,
         "employee_id": employee_id,
@@ -173,7 +175,7 @@ def build_graph():
 GRAPH = build_graph()
 
 
-def run_agent(message: str, employee_id: str = "E001") -> dict[str, Any]:
+def run_agent(message: str, employee_id: str = DEFAULT_EMPLOYEE_ID) -> dict[str, Any]:
     result = GRAPH.invoke({"message": message, "employee_id": employee_id})
     return {
         "answer": result.get("answer", ""),

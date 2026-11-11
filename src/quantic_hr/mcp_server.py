@@ -31,7 +31,7 @@ def lookup_employee_profile(employee_id: str) -> dict[str, Any]:
 
 @mcp.tool()
 def check_pto_balance(employee_id: str) -> dict[str, Any]:
-    """Return synthetic PTO accrual, used, pending, and remaining hours."""
+    """Return synthetic PTO in days: plan, accrued, taken, pending, and available days."""
     return tools.check_pto_balance(employee_id)
 
 
@@ -39,15 +39,18 @@ def check_pto_balance(employee_id: str) -> dict[str, Any]:
 def check_policy_compliance(
     employee_id: str,
     check_type: str,
-    requested_hours: float = 0,
+    requested_days: float = 0,
     destination_region: str | None = None,
+    requested_hours: float = 0,
 ) -> dict[str, Any]:
-    """Deterministic remote-work or PTO compliance check against synthetic data."""
+    """Deterministic compliance check. check_type is "pto" (use requested_days) or
+    "remote_work" (optional destination_region, a US state code such as "CA")."""
     return tools.check_policy_compliance(
         employee_id,
         check_type,
         requested_hours=requested_hours,
         destination_region=destination_region,
+        requested_days=requested_days,
     )
 
 

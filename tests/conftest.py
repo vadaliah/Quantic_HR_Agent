@@ -32,3 +32,18 @@ def database_url() -> str:
     if problem:
         pytest.skip(f"database not reachable ({problem}); set DATABASE_URL to a seeded Postgres")
     return url
+
+
+# PTO balances accrue daily; pin the seed's as_of date so assertions are stable.
+os.environ.setdefault("QUANTIC_AS_OF", "2026-11-03")
+
+
+@pytest.fixture(scope="session")
+def policy_chunks_loaded(database_url: str) -> str:
+    import psycopg
+
+    with psycopg.connect(database_url) as conn:
+        count = conn.execute("SELECT count(*) FROM policy_chunks").fetchone()[0]
+    if not count:
+        pytest.skip("policy_chunks is empty; run scripts/ingest_corpus.py (or --skip-embeddings)")
+    return database_url

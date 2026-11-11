@@ -3,7 +3,7 @@ import { useState } from "react";
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 export default function App() {
-  const [employeeId, setEmployeeId] = useState("E001");
+  const [employeeId, setEmployeeId] = useState("E1007");
   const [message, setMessage] = useState("Can I work remotely from another state?");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -31,8 +31,10 @@ export default function App() {
         <label>
           Employee
           <select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
-            <option value="E001">E001 Amina Cole (NY, remote-eligible)</option>
-            <option value="E002">E002 Ben Ortiz (OH, not remote-eligible)</option>
+            <option value="E1007">E1007 Test User 007 (NY, remote-eligible)</option>
+            <option value="E1012">E1012 Test User 012 (NY, PTO covers 3 days)</option>
+            <option value="E1019">E1019 Test User 019 (NY, insufficient PTO)</option>
+            <option value="E1001">E1001 Test User 001 (NY, onsite, not remote-eligible)</option>
           </select>
         </label>
         <textarea

@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from quantic_hr.agent import run_agent
+from quantic_hr.agent import DEFAULT_EMPLOYEE_ID, run_agent
 from quantic_hr.db import connection
 
 app = FastAPI(title="Quantic HR BFF", version="0.1.0")
@@ -22,7 +22,7 @@ app.add_middleware(
 
 class ChatRequest(BaseModel):
     message: str
-    employee_id: str = Field(default="E001")
+    employee_id: str = Field(default=DEFAULT_EMPLOYEE_ID)
 
 
 @app.get("/health")

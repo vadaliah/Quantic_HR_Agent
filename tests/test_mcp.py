@@ -26,13 +26,6 @@ def _payload(result) -> object:
     return texts[0] if texts else None
 
 
-@pytest.fixture
-def database_url() -> str:
-    url = os.environ.get("DATABASE_URL", "postgresql://quantic@127.0.0.1:5433/quantic_hr")
-    os.environ["DATABASE_URL"] = url
-    return url
-
-
 @pytest.mark.asyncio
 async def test_mcp_discovery_and_calls(database_url: str) -> None:
     params = StdioServerParameters(
@@ -49,7 +42,7 @@ async def test_mcp_discovery_and_calls(database_url: str) -> None:
             assert REQUIRED_TOOLS <= names
 
             profile = _payload(
-                await session.call_tool("lookup_employee_profile", {"employee_id": "E001"})
+                await session.call_tool("lookup_employee_profile", {"employee_id": "E1007"})
             )
             assert isinstance(profile, dict)
             inner = profile.get("found", profile)
@@ -57,10 +50,25 @@ async def test_mcp_discovery_and_calls(database_url: str) -> None:
                 inner = profile["result"]
             # FastMCP may wrap as {"found": true, ...} directly or nested.
             blob = str(profile)
-            assert "Amina Cole" in blob
+            assert "Test User 007" in blob
             assert "true" in blob.lower() or '"found": true' in blob.lower() or profile.get("found") is True
 
+            pto = _payload(await session.call_tool("check_pto_balance", {"employee_id": "E1012"}))
+            assert "available_days" in str(pto)
+
+
+@pytest.mark.asyncio
+async def test_mcp_policy_search_returns_corpus_citations(policy_chunks_loaded: str) -> None:
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "quantic_hr.mcp_server"],
+        env={**os.environ, "PYTHONPATH": str(ROOT / "src"), "DATABASE_URL": policy_chunks_loaded},
+        cwd=str(ROOT),
+    )
+    async with stdio_client(params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
             search = _payload(
                 await session.call_tool("search_policy_documents", {"query": "remote work"})
             )
-            assert "remote-work-policy" in str(search)
+            assert "POL-003" in str(search)
