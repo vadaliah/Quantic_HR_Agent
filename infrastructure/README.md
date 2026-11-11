@@ -28,7 +28,7 @@ That mode omits new RDS/secret/admin-host resources and does not add security-gr
 - Aurora PostgreSQL 17.4 Serverless v2 (0.5–2 ACU), encrypted, IAM auth, database `quantic_hr_agent`, secret `quantic-hr-agent/dev/database/admin`.
 - SSM admin host (`t4g.nano`) in a private subnet. Its AMI is an SSM parameter resolved at deploy time.
 - Runtime role `quantic-hr-agent-dev-runtime`, scoped to one chat model (`-c quanticChatModel`, default `nova-pro`, alternative `claude-sonnet-4-6`) through its `us.` inference profile and foundation model in us-east-1/us-east-2/us-west-2, Titan Text Embeddings v2 in us-east-2, `rds-db:connect` as `quantic_hr_agent`, and one log group.
-- AgentCore runtime `QuanticHelloWorld` (`networkMode=VPC`, HTTP `/ping` and `/invocations`). Direct code deploy of `runtime/hello_world`. No model or database call.
+- AgentCore runtime `QuanticHrAgent` (`networkMode=VPC`, HTTP `/ping` and `/invocations` on 8080): the repository `Dockerfile` built for linux/arm64 by a CDK `DockerImageAsset` and pushed to the bootstrap ECR repository `cdk-hnb659fds-container-assets-287238357427-us-east-2` during `cdk deploy`. Env: chat/embedding model, region, `DB_HOST`/`DB_PORT`, `DB_NAME=quantic_hr_agent`, `DB_USER=quantic_hr_agent`, IAM DB auth. `-c quanticRuntimeImage=hello-world` falls back to the code-deployed `QuanticHelloWorld` (`runtime/hello_world`).
 
 SQL under `database/migrations/` is not applied here. The first live session, after approval, is still a read-only check of `pg_available_extensions` before `CREATE EXTENSION vector`.
 
@@ -57,4 +57,5 @@ Do not bootstrap a second toolkit. Step 0 already found CDKToolkit in this accou
 | Context key | Default | Effect |
 | --- | --- | --- |
 | `quanticChatModel` | `nova-pro` | Scopes the runtime role to this model. Set the app's `BEDROCK_CHAT_INFERENCE_PROFILE` to the `ChatInferenceProfileId` output. `claude-sonnet-4-6` is the alternative. Confirm Nova Pro access in 287238357427 before deploy. |
+| `quanticRuntimeImage` | `agent` | `agent` builds and pushes the Dockerfile image at deploy time; `hello-world` uses the code-deployed Hello World runtime. |
 | `quanticDeletionProtection` | `false` | Off for the time-limited demo, so `cdk destroy` deletes Aurora. `true` turns deletion protection on and retains the cluster on stack delete. |

@@ -8,6 +8,7 @@ import {
   resolveChatModel,
   resolveDatabaseMode,
   resolveDeletionProtection,
+  resolveRuntimeImage,
 } from '../lib/config';
 import { QuanticHrAgentStack } from '../lib/infrastructure-stack';
 
@@ -204,8 +205,54 @@ describe('runtime IAM scope', () => {
   });
 });
 
-describe('AgentCore Hello World runtime', () => {
+describe('AgentCore agent runtime (default image)', () => {
   const template = synthesize();
+  const json = JSON.stringify(template.toJSON());
+
+  test('runs the repository Dockerfile image in the VPC with the HTTP contract', () => {
+    template.resourceCountIs('AWS::BedrockAgentCore::Runtime', 1);
+    template.hasResourceProperties('AWS::BedrockAgentCore::Runtime', {
+      AgentRuntimeName: quanticConfig.agentRuntimeName,
+      NetworkConfiguration: { NetworkMode: 'VPC' },
+      ProtocolConfiguration: 'HTTP',
+      AgentRuntimeArtifact: {
+        ContainerConfiguration: { ContainerUri: Match.anyValue() },
+      },
+    });
+    expect(json).toContain('cdk-hnb659fds-container-assets');
+    expect(json).not.toContain('AWS::BedrockAgentCore::Gateway');
+  });
+
+  test('passes model, region and IAM database settings, no secrets', () => {
+    const runtimes = Object.values(template.findResources('AWS::BedrockAgentCore::Runtime')) as Array<{
+      Properties: { EnvironmentVariables: Record<string, unknown> };
+    }>;
+    const env = runtimes[0].Properties.EnvironmentVariables;
+    expect(env.BEDROCK_CHAT_INFERENCE_PROFILE).toBe('us.amazon.nova-pro-v1:0');
+    expect(env.BEDROCK_EMBEDDING_MODEL).toBe(quanticConfig.embeddingModelId);
+    expect(env.AWS_REGION).toBe('us-east-2');
+    expect(env.DB_NAME).toBe('quantic_hr_agent');
+    expect(env.DB_USER).toBe('quantic_hr_agent');
+    expect(env.DB_IAM_AUTH).toBe('true');
+    expect(JSON.stringify(env.DB_HOST)).toContain('Endpoint.Address');
+    expect(JSON.stringify(env)).not.toMatch(/secret|password/i);
+  });
+
+  test('lets the runtime role pull only from the asset repository', () => {
+    const document = runtimePolicyDocument(template);
+    expect(document).toContain('ecr:BatchGetImage');
+    expect(document).toContain('cdk-hnb659fds-container-assets');
+  });
+
+  test('rejects an unknown runtime image', () => {
+    expect(() =>
+      resolveRuntimeImage({ node: { tryGetContext: () => 'latest' } }),
+    ).toThrow(/Unknown quanticRuntimeImage/);
+  });
+});
+
+describe('AgentCore Hello World fallback', () => {
+  const template = synthesize({ quanticRuntimeImage: 'hello-world' });
   const json = JSON.stringify(template.toJSON());
 
   test('creates one VPC Hello World runtime and no MCP or RAG services', () => {
@@ -219,6 +266,7 @@ describe('AgentCore Hello World runtime', () => {
     });
     expect(json).not.toContain('search_policy_documents');
     expect(json).not.toContain('AWS::BedrockAgentCore::Gateway');
+    expect(json).not.toContain('container-assets');
   });
 });
 

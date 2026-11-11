@@ -163,12 +163,21 @@ the runtime role, AgentCore).
 - **Model access.** Confirm Nova Pro (the default) is enabled in account `287238357427` before
   deploying; it is not yet confirmed. To use Claude instead, deploy with
   `-c quanticChatModel=claude-sonnet-4-6` and set `BEDROCK_CHAT_INFERENCE_PROFILE` to match.
+- **Agent image.** `cdk deploy` builds the repository `Dockerfile` for linux/arm64 (Docker with
+  buildx/arm64 support required on the deploying machine) and pushes it to the CDK bootstrap
+  repository `cdk-hnb659fds-container-assets-287238357427-us-east-2`, tagged with the asset hash.
+  AgentCore Runtime then runs it (`/ping`, `/invocations` on port 8080). To build only:
+  `docker buildx build --platform linux/arm64 -t quantic-hr-agent .`
+  `-c quanticRuntimeImage=hello-world` deploys the Hello World runtime instead.
 - **Teardown.** `cd infrastructure && npx cdk destroy QuanticHrAgentStack`. Aurora deletion
   protection is off by default (`quanticDeletionProtection=false`) so the cluster is deleted
   with no final snapshot. If it was deployed with `-c quanticDeletionProtection=true`, the
   cluster is retained: turn protection off and delete it explicitly. The runtime log group
   `/quantic-hr-agent/dev/runtime` is retained by design and the admin secret enters Secrets
-  Manager's recovery window; remove or wait them out after grading.
+  Manager's recovery window; remove or wait them out after grading. **ECR images in the
+  bootstrap repository are not removed by `cdk destroy`**: delete the agent image tags from
+  `cdk-hnb659fds-container-assets-287238357427-us-east-2` (or run `cdk gc` if enabled) to stop
+  the small storage charge.
 
 ## Docs
 - [Cost-first strategy](docs/COST_FIRST_DELIVERY_STRATEGY.md)

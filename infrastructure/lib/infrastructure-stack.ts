@@ -9,7 +9,9 @@ import {
   resolveChatModel,
   resolveDatabaseMode,
   resolveDeletionProtection,
+  resolveRuntimeImage,
 } from './config';
+import { AgentContainerRuntime } from './constructs/agent-container-runtime';
 import { AgentRuntimeRole } from './constructs/agent-runtime-role';
 import { DatabaseConstruct } from './constructs/database';
 import { DatabaseAccessConstruct } from './constructs/database-access';
@@ -27,9 +29,11 @@ export class QuanticHrAgentStack extends cdk.Stack {
     const databaseMode = resolveDatabaseMode(this);
     const chatModel = resolveChatModel(this);
     const deletionProtection = resolveDeletionProtection(this);
+    const runtimeImage = resolveRuntimeImage(this);
     const network = new NetworkConstruct(this, 'Network');
 
     let cluster: rds.IDatabaseCluster;
+    let databaseEndpoint: { hostname: string; port: string } | undefined;
     if (databaseMode === 'reuse-cafe-fausse') {
       cluster = new ExistingCafeFausseDatabase(this, 'ExistingDatabase').cluster;
     } else {
@@ -42,6 +46,10 @@ export class QuanticHrAgentStack extends cdk.Stack {
         securityGroup: network.adminSecurityGroup,
       });
       cluster = database.cluster;
+      databaseEndpoint = {
+        hostname: database.cluster.clusterEndpoint.hostname,
+        port: cdk.Token.asString(database.cluster.clusterEndpoint.port),
+      };
       database.cluster.connections.allowDefaultPortFrom(
         network.runtimeSecurityGroup,
         'PostgreSQL from the Quantic AgentCore runtime',
@@ -56,11 +64,20 @@ export class QuanticHrAgentStack extends cdk.Stack {
       cluster,
       chatModel,
     });
-    const helloWorld = new HelloWorldRuntime(this, 'HelloWorld', {
-      vpc: network.vpc,
-      securityGroup: network.runtimeSecurityGroup,
-      executionRole: runtimeRole.role,
-    });
+    const runtime =
+      runtimeImage === 'agent'
+        ? new AgentContainerRuntime(this, 'Agent', {
+            vpc: network.vpc,
+            securityGroup: network.runtimeSecurityGroup,
+            executionRole: runtimeRole.role,
+            chatModel,
+            database: databaseEndpoint,
+          }).runtime
+        : new HelloWorldRuntime(this, 'HelloWorld', {
+            vpc: network.vpc,
+            securityGroup: network.runtimeSecurityGroup,
+            executionRole: runtimeRole.role,
+          }).runtime;
 
     const runtimeSubnets = network.vpc.selectSubnets({
       subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -81,7 +98,7 @@ export class QuanticHrAgentStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, 'RuntimeSubnetIds', {
       value: runtimeSubnets.subnetIds.join(','),
-      description: 'Private subnets used by the AgentCore Hello World runtime.',
+      description: 'Private subnets used by the AgentCore runtime.',
     });
     new cdk.CfnOutput(this, 'RuntimeSecurityGroupId', {
       value: network.runtimeSecurityGroup.securityGroupId,
@@ -89,8 +106,11 @@ export class QuanticHrAgentStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'RuntimeRoleArn', {
       value: runtimeRole.role.roleArn,
     });
-    new cdk.CfnOutput(this, 'HelloWorldRuntimeArn', {
-      value: helloWorld.runtime.agentRuntimeArn,
+    new cdk.CfnOutput(this, 'RuntimeImage', {
+      value: runtimeImage,
+    });
+    new cdk.CfnOutput(this, 'AgentRuntimeArn', {
+      value: runtime.agentRuntimeArn,
     });
   }
 }

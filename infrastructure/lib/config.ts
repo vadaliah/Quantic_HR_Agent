@@ -28,6 +28,7 @@ export const quanticConfig = {
   agentCoreAvailabilityZoneIds: ['use2-az1', 'use2-az2'],
   vpcCidr: '10.20.0.0/16',
   helloWorldRuntimeName: 'QuanticHelloWorld',
+  agentRuntimeName: 'QuanticHrAgent',
   adminAmiParameter:
     '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64',
 } as const;
@@ -91,6 +92,21 @@ export function resolveDeletionProtection(scope: ContextScope): boolean {
     return false;
   }
   throw new Error(`Unknown quanticDeletionProtection "${raw}". Use true or false.`);
+}
+
+export type RuntimeImage = 'agent' | 'hello-world';
+
+/**
+ * AgentCore runtime image. `agent` (default) builds the repository Dockerfile
+ * (linux/arm64) and pushes it to the CDK bootstrap ECR repository at deploy time.
+ * `-c quanticRuntimeImage=hello-world` falls back to the code-deployed Hello World.
+ */
+export function resolveRuntimeImage(scope: ContextScope): RuntimeImage {
+  const raw = String(scope.node.tryGetContext('quanticRuntimeImage') ?? 'agent');
+  if (raw === 'agent' || raw === 'hello-world') {
+    return raw;
+  }
+  throw new Error(`Unknown quanticRuntimeImage "${raw}". Use agent or hello-world.`);
 }
 
 export type DatabaseMode = 'create' | 'reuse-cafe-fausse';
