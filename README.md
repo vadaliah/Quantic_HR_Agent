@@ -14,11 +14,41 @@ private connection for the application. Local Postgres scripts, the local schema
 | React UI (Vite) | Local (port 5173) or a static host |
 | FastAPI BFF + LangGraph + MCP | Local process or a deployed service |
 | Postgres + pgvector | Aurora Serverless v2, `us-east-2`, database `quantic_hr_agent` |
-| Embeddings + chat | Amazon Bedrock (Titan Text Embeddings v2, Claude) |
+| Embeddings + chat | Amazon Bedrock: Titan Text Embeddings v2 (1024 dims) and one chat model, default Claude Sonnet 4.6 (`us.anthropic.claude-sonnet-4-6`) |
 
 ```text
-Vite (5173) → FastAPI /chat /health → LangGraph → stdio MCP → Aurora + pgvector
+Vite (5173) → FastAPI /chat /health → LangGraph → Bedrock Converse tool-use loop
+                                                  ↘ stdio MCP tools → Aurora + pgvector
 ```
+
+The agent runs a Bedrock Converse tool-use loop over the MCP tools and answers only from
+tool results, citing `[document_id section_id]`. If no tool result grounds the answer it
+abstains and points to People Operations. When Bedrock is unavailable (no AWS credentials,
+an error, or `QUANTIC_AGENT_MODE=keyword`) it falls back to the local keyword router, which
+uses the same MCP tools. Policy search uses pgvector cosine similarity over Titan v2
+embeddings and falls back to `ILIKE` when no embeddings are loaded.
+
+## Configuration
+
+One chat model is used at a time. `BEDROCK_CHAT_INFERENCE_PROFILE` (app) and the CDK context
+`quanticChatModel` (runtime role) must name the same model:
+
+| Model | App setting | CDK context | Status in us-east-2 (checked 2026-11-11) |
+| --- | --- | --- | --- |
+| Claude Sonnet 4.6 (default) | `us.anthropic.claude-sonnet-4-6` | `claude-sonnet-4-6` | Active via `us.` profile; Claude access recorded in `docs/STEP0_AWS_FINDINGS.md` |
+| Amazon Nova Pro (alternative) | `us.amazon.nova-pro-v1:0` | `nova-pro` | Active via `us.` profile only; access in 287238357427 not yet confirmed |
+
+Claude Sonnet 4.5 is marked Legacy in Bedrock and is no longer configured.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `BEDROCK_CHAT_INFERENCE_PROFILE` | `us.anthropic.claude-sonnet-4-6` | Chat model (see above) |
+| `BEDROCK_EMBEDDING_MODEL` | `amazon.titan-embed-text-v2:0` | Embeddings, 1024 dims, normalized |
+| `AWS_REGION` | `us-east-2` | Bedrock region |
+| `QUANTIC_AGENT_MODE` | `auto` | `auto` (Bedrock when AWS credentials exist), `bedrock`, `keyword` |
+| `QUANTIC_RETRIEVAL` | `auto` | `auto` (vector when embeddings and credentials exist), `vector`, `keyword` |
+| `QUANTIC_MIN_SIMILARITY` | `0.2` | Cosine floor for policy matches; lower matches are dropped so the agent abstains. Tune after ingestion. |
+| `QUANTIC_AS_OF` | today | Fixed date for PTO balances (evaluation and tests pin `2026-11-03`) |
 
 ## Database setup
 
@@ -45,19 +75,23 @@ always use the admin secret.
 
 ## Corpus ingestion (RAG)
 
-`corpus/` holds 16 policy documents (~8,200 words). Vector search runs only against Aurora.
+`corpus/` holds 12 policy documents, POL-001 to POL-012 (~5,600 words; POL-006 and POL-011
+are in `corpus/sources/`). `corpus/SOURCES.md` is provenance, not a policy, and is not ingested.
 Until ingestion has run, `policy_chunks` is empty and policy questions return
 "no matching passage" — that is the correct answer against an empty index, not a bug.
 
 ```bash
 export DATABASE_URL=postgresql://quantic_hr_admin:<pw>@<cluster-endpoint>:5432/quantic_hr_agent
-python scripts/ingest_corpus.py --dry-run   # parse + chunk only, no AWS, no writes
-python scripts/ingest_corpus.py             # embed with Titan and write policy_chunks
+uv run python scripts/ingest_corpus.py --dry-run          # parse + chunk only, no AWS, no writes
+uv run python scripts/ingest_corpus.py                    # embed with Titan v2 and write policy_chunks
+uv run python scripts/ingest_corpus.py --skip-embeddings  # text only (keyword search), no AWS
 ```
 
-`--dry-run` reports 16 documents and 177 chunks without contacting AWS. Embedding the whole
-corpus is about 9,600 tokens, roughly three cents, one time. Chunk IDs are content hashes, so
-re-running overwrites rather than duplicating; `--force` re-embeds everything.
+`--dry-run` reports 12 documents and 134 chunks (one per numbered section) and an estimate
+of about 9,200 tokens, well under one cent of Titan v2 embedding, one time. Chunk IDs are
+`<document>:<section>` (for example `POL-001:2.1`), so re-running updates rows in place;
+unchanged text keeps its embedding (`content_sha`), sections removed from a document are
+deleted, and `--force` re-embeds everything.
 
 Ingestion needs a direct Postgres connection because the embeddings must be computed by
 Bedrock before the SQL is written, which the Data API cannot do on its own.
@@ -83,10 +117,15 @@ npm --prefix frontend run dev
 uv run pytest -q
 ```
 
-Tests that touch the database require `DATABASE_URL` pointing at Aurora. MCP tool-discovery
-tests need no AWS contact.
+No test calls AWS: Bedrock is replaced by a fake client (`tests/fakes.py`). Tests that touch
+the database need `DATABASE_URL` pointing at a Postgres with pgvector, migrations 001–006 and
+the seed applied; they are **skipped** when it is unreachable. The policy-search tests also
+need `policy_chunks` loaded (`ingest_corpus.py --skip-embeddings` is enough).
 
 ## Demo workflows
+
+Seed employees are `E1001`–`E1025` (`mock_data/employees.json`); the UI offers E1007, E1012,
+E1019 and E1001.
 
 1. **Remote work from abroad** — `E1007` asks about working from Portugal for six weeks.
    Over 30 consecutive days triggers People Operations and Legal approval (POL-004 2.2), with
@@ -103,6 +142,25 @@ npm ci && npm test && npm run synth && npm run synth:reuse
 ```
 
 Do not run `scripts/deploy-sandbox.sh`. Café Fausse and AEA stay untouched.
+
+## Deployment and teardown
+
+**Nothing is deployed** (as of 2026-11-11). The target is `QuanticHrAgentStack` in account
+`287238357427`, `us-east-2` (VPC with one NAT gateway, Aurora Serverless v2 with pgvector,
+the runtime role, AgentCore).
+
+- **Sponsor approval first.** No deploy without the sponsor's explicit go.
+- **Time-limited exposure.** Agree the deploy and teardown dates before deploying. The stack
+  costs roughly $75 a month while it is up (Aurora 0.5 ACU floor plus the NAT gateway), before
+  Bedrock usage, so keep the window to the grading period.
+- **Model access.** Confirm the chosen chat model is enabled in the account (Nova Pro is not yet
+  confirmed) and deploy with the matching context, for example `-c quanticChatModel=claude-sonnet-4-6`.
+- **Teardown.** `cd infrastructure && npx cdk destroy QuanticHrAgentStack`. Aurora deletion
+  protection is off by default (`quanticDeletionProtection=false`) so the cluster is deleted
+  with no final snapshot. If it was deployed with `-c quanticDeletionProtection=true`, the
+  cluster is retained: turn protection off and delete it explicitly. The runtime log group
+  `/quantic-hr-agent/dev/runtime` is retained by design and the admin secret enters Secrets
+  Manager's recovery window; remove or wait them out after grading.
 
 ## Docs
 - [Cost-first strategy](docs/COST_FIRST_DELIVERY_STRATEGY.md)
