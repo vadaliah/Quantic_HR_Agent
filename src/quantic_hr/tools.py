@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
+from quantic_hr import bedrock
 from quantic_hr.db import connection
 
 HOURS_PER_DAY = 8.0
@@ -67,22 +69,125 @@ def check_pto_balance(employee_id: str) -> dict[str, Any]:
     return result
 
 
-def search_policy_documents(query: str, limit: int = 5) -> dict[str, Any]:
+_STOPWORDS = {
+    "about", "after", "also", "another", "before", "could", "does", "from", "have", "into",
+    "many", "much", "need", "should", "that", "their", "there", "this", "what", "when",
+    "where", "which", "while", "will", "with", "would", "your",
+}
+
+_SEARCH_COLUMNS = """
+    c.chunk_id, c.document_id, c.section_id, c.heading, c.content, d.title, d.source_uri
+"""
+
+
+def retrieval_mode() -> str:
+    """QUANTIC_RETRIEVAL: auto (vector when embeddings and AWS credentials exist), vector, keyword."""
+    mode = os.environ.get("QUANTIC_RETRIEVAL", "auto").strip().lower()
+    return mode if mode in {"auto", "vector", "keyword"} else "auto"
+
+
+def min_similarity() -> float:
+    """Cosine-similarity floor; weaker matches are dropped so the agent can abstain."""
+    try:
+        return float(os.environ.get("QUANTIC_MIN_SIMILARITY", "0.2"))
+    except ValueError:
+        return 0.2
+
+
+def _vector_search(query: str, limit: int) -> dict[str, Any]:
+    vector = bedrock.vector_literal(bedrock.embed_text(query))
+    with connection() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT {_SEARCH_COLUMNS}, 1 - (c.embedding <=> %s::vector) AS score
+            FROM policy_chunks c
+            JOIN policy_documents d ON d.document_id = c.document_id
+            WHERE c.embedding IS NOT NULL
+            ORDER BY c.embedding <=> %s::vector
+            LIMIT %s
+            """,
+            (vector, vector, limit),
+        ).fetchall()
+    floor = min_similarity()
+    matches = [{**row, "score": round(float(row["score"]), 4)} for row in rows if float(row["score"]) >= floor]
+    return {"query": query, "matches": matches, "retrieval": "vector", "min_similarity": floor}
+
+
+def _keyword_terms(query: str) -> list[str]:
+    words = re.findall(r"[a-z0-9]+", query.lower())
+    terms = [w for w in words if len(w) >= 4 and w not in _STOPWORDS]
+    return list(dict.fromkeys(terms))[:8]
+
+
+def _keyword_search(query: str, limit: int) -> dict[str, Any]:
+    """ILIKE fallback: the whole phrase first, then chunks ranked by matching terms."""
     like = f"%{query}%"
     with connection() as conn:
         rows = conn.execute(
-            """
-            SELECT c.chunk_id, c.document_id, c.section_id, c.heading, c.content,
-                   d.title, d.source_uri
+            f"""
+            SELECT {_SEARCH_COLUMNS}
             FROM policy_chunks c
             JOIN policy_documents d ON d.document_id = c.document_id
             WHERE c.content ILIKE %s OR c.heading ILIKE %s OR d.title ILIKE %s
-            ORDER BY c.document_id, c.section_id
+            ORDER BY c.document_id, c.chunk_index, c.section_id
             LIMIT %s
             """,
             (like, like, like, limit),
         ).fetchall()
-    return {"query": query, "matches": rows}
+        terms = _keyword_terms(query)
+        if not rows and terms:
+            patterns = [f"%{term}%" for term in terms]
+            hits = " + ".join(
+                "((c.content || ' ' || coalesce(c.heading, '') || ' ' || d.title) ILIKE %s)::int"
+                for _ in patterns
+            )
+            rows = conn.execute(
+                f"""
+                SELECT * FROM (
+                  SELECT {_SEARCH_COLUMNS}, c.chunk_index, ({hits}) AS hits
+                  FROM policy_chunks c
+                  JOIN policy_documents d ON d.document_id = c.document_id
+                ) ranked
+                WHERE hits >= %s
+                ORDER BY hits DESC, document_id, chunk_index
+                LIMIT %s
+                """,
+                (*patterns, min(2, len(patterns)), limit),
+            ).fetchall()
+            rows = [{k: v for k, v in row.items() if k not in {"hits", "chunk_index"}} for row in rows]
+    return {"query": query, "matches": rows, "retrieval": "keyword"}
+
+
+def search_policy_documents(query: str, limit: int = 5) -> dict[str, Any]:
+    """Semantic search with pgvector (HNSW, cosine) over Titan v2 embeddings.
+
+    Falls back to ILIKE when no chunk has an embedding yet, when AWS credentials
+    are absent, or when Bedrock fails (unless QUANTIC_RETRIEVAL=vector).
+    """
+    limit = max(1, min(int(limit or 5), 10))
+    mode = retrieval_mode()
+    reason = "QUANTIC_RETRIEVAL=keyword"
+    if mode != "keyword":
+        with connection() as conn:
+            has_embeddings = conn.execute(
+                "SELECT EXISTS (SELECT 1 FROM policy_chunks WHERE embedding IS NOT NULL) AS present"
+            ).fetchone()["present"]
+        if not has_embeddings:
+            reason = "no embeddings in policy_chunks; run scripts/ingest_corpus.py"
+        elif mode == "auto" and not bedrock.credentials_available():
+            reason = "no AWS credentials for Bedrock"
+        else:
+            try:
+                return _vector_search(query, limit)
+            except bedrock.BedrockUnavailable as exc:
+                if mode == "vector":
+                    raise
+                reason = str(exc)
+        if mode == "vector":
+            raise bedrock.BedrockUnavailable(reason)
+    result = _keyword_search(query, limit)
+    result["fallback_reason"] = reason
+    return result
 
 
 def get_policy_section(document_id: str, section_id: str) -> dict[str, Any]:

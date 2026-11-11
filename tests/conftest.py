@@ -36,6 +36,8 @@ def database_url() -> str:
 
 # PTO balances accrue daily; pin the seed's as_of date so assertions are stable.
 os.environ.setdefault("QUANTIC_AS_OF", "2026-11-03")
+# Never reach Bedrock from tests by default; tests that need it inject a fake client.
+os.environ.setdefault("QUANTIC_RETRIEVAL", "keyword")
 
 
 @pytest.fixture(scope="session")
