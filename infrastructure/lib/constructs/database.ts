@@ -8,6 +8,8 @@ import { quanticConfig } from '../config';
 
 export interface DatabaseConstructProps {
   vpc: ec2.IVpc;
+  /** See resolveDeletionProtection in config.ts. */
+  deletionProtection: boolean;
 }
 
 export class DatabaseConstruct extends Construct {
@@ -41,8 +43,10 @@ export class DatabaseConstruct extends Construct {
       },
       defaultDatabaseName: quanticConfig.databaseName,
       storageEncrypted: true,
-      deletionProtection: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      // Time-limited demo: with protection off, `cdk destroy` deletes the cluster
+      // (no final snapshot). With protection on, the cluster is also retained.
+      deletionProtection: props.deletionProtection,
+      removalPolicy: props.deletionProtection ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
       securityGroups: [this.securityGroup],
     });
 

@@ -3,10 +3,11 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 
-import { bedrockInvokeResourceArns, quanticConfig } from '../config';
+import { bedrockInvokeResourceArns, ChatModel, quanticConfig } from '../config';
 
 export interface AgentRuntimeRoleProps {
   cluster: rds.IDatabaseCluster;
+  chatModel: ChatModel;
 }
 
 export class AgentRuntimeRole extends Construct {
@@ -43,7 +44,7 @@ export class AgentRuntimeRole extends Construct {
           'bedrock:Converse',
           'bedrock:ConverseStream',
         ],
-        resources: bedrockInvokeResourceArns(account),
+        resources: bedrockInvokeResourceArns(account, props.chatModel),
       }),
     );
 

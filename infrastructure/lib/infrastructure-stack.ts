@@ -3,7 +3,13 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import { Construct } from 'constructs';
 
-import { cafeFausseAurora, quanticConfig, resolveDatabaseMode } from './config';
+import {
+  cafeFausseAurora,
+  quanticConfig,
+  resolveChatModel,
+  resolveDatabaseMode,
+  resolveDeletionProtection,
+} from './config';
 import { AgentRuntimeRole } from './constructs/agent-runtime-role';
 import { DatabaseConstruct } from './constructs/database';
 import { DatabaseAccessConstruct } from './constructs/database-access';
@@ -19,6 +25,8 @@ export class QuanticHrAgentStack extends cdk.Stack {
     cdk.Tags.of(this).add('env', quanticConfig.environment);
 
     const databaseMode = resolveDatabaseMode(this);
+    const chatModel = resolveChatModel(this);
+    const deletionProtection = resolveDeletionProtection(this);
     const network = new NetworkConstruct(this, 'Network');
 
     let cluster: rds.IDatabaseCluster;
@@ -27,6 +35,7 @@ export class QuanticHrAgentStack extends cdk.Stack {
     } else {
       const database = new DatabaseConstruct(this, 'Database', {
         vpc: network.vpc,
+        deletionProtection,
       });
       const databaseAccess = new DatabaseAccessConstruct(this, 'DatabaseAccess', {
         vpc: network.vpc,
@@ -45,6 +54,7 @@ export class QuanticHrAgentStack extends cdk.Stack {
 
     const runtimeRole = new AgentRuntimeRole(this, 'AgentRuntime', {
       cluster,
+      chatModel,
     });
     const helloWorld = new HelloWorldRuntime(this, 'HelloWorld', {
       vpc: network.vpc,
@@ -58,6 +68,10 @@ export class QuanticHrAgentStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'DatabaseMode', {
       value: databaseMode,
+    });
+    new cdk.CfnOutput(this, 'ChatInferenceProfileId', {
+      value: chatModel.inferenceProfileId,
+      description: 'Set BEDROCK_CHAT_INFERENCE_PROFILE to this value for the app.',
     });
     new cdk.CfnOutput(this, 'DatabaseClusterIdentifier', {
       value:

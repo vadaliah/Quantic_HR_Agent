@@ -1,7 +1,14 @@
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 
-import { cafeFausseAurora, quanticConfig, resolveDatabaseMode } from '../lib/config';
+import {
+  cafeFausseAurora,
+  chatModels,
+  quanticConfig,
+  resolveChatModel,
+  resolveDatabaseMode,
+  resolveDeletionProtection,
+} from '../lib/config';
 import { QuanticHrAgentStack } from '../lib/infrastructure-stack';
 
 function synthesize(context: Record<string, string> = {}): Template {
@@ -63,7 +70,7 @@ describe('Aurora encryption and database ingress', () => {
       DatabaseName: 'quantic_hr',
       Engine: 'aurora-postgresql',
       EngineVersion: '17.4',
-      DeletionProtection: true,
+      DeletionProtection: false,
       ServerlessV2ScalingConfiguration: {
         MinCapacity: 0.5,
         MaxCapacity: 2,
@@ -72,6 +79,29 @@ describe('Aurora encryption and database ingress', () => {
     template.hasResourceProperties('AWS::SecretsManager::Secret', {
       Name: 'quantic-hr-agent/dev/database/admin',
     });
+  });
+
+  test('lets cdk destroy remove the demo cluster by default', () => {
+    const clusters = Object.values(template.findResources('AWS::RDS::DBCluster')) as Array<{
+      DeletionPolicy?: string;
+    }>;
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0].DeletionPolicy).toBe('Delete');
+  });
+
+  test('keeps and retains the cluster when deletion protection is requested', () => {
+    const protectedTemplate = synthesize({ quanticDeletionProtection: 'true' });
+    protectedTemplate.hasResourceProperties('AWS::RDS::DBCluster', { DeletionProtection: true });
+    const clusters = Object.values(protectedTemplate.findResources('AWS::RDS::DBCluster')) as Array<{
+      DeletionPolicy?: string;
+    }>;
+    expect(clusters[0].DeletionPolicy).toBe('Retain');
+  });
+
+  test('rejects an unknown deletion protection value', () => {
+    expect(() =>
+      resolveDeletionProtection({ node: { tryGetContext: () => 'maybe' } }),
+    ).toThrow(/Unknown quanticDeletionProtection/);
   });
 
   test('allows PostgreSQL only from the runtime and admin security groups', () => {
@@ -94,8 +124,23 @@ describe('Aurora encryption and database ingress', () => {
   });
 });
 
+function runtimePolicyDocument(template: Template): string {
+  const runtimeRoleId = Object.entries(template.findResources('AWS::IAM::Role')).find(
+    ([, role]) =>
+      (role as { Properties?: { RoleName?: string } }).Properties?.RoleName ===
+      'quantic-hr-agent-dev-runtime',
+  )?.[0];
+  expect(runtimeRoleId).toBeDefined();
+  const policies = Object.values(template.findResources('AWS::IAM::Policy')).filter((policy) =>
+    JSON.stringify(policy).includes(`"${runtimeRoleId}"`),
+  );
+  expect(policies.length).toBeGreaterThan(0);
+  return JSON.stringify(policies);
+}
+
 describe('runtime IAM scope', () => {
   const template = synthesize();
+  const defaultModel = chatModels['claude-sonnet-4-6'];
 
   test('limits the runtime role to selected models, IAM database auth, and its log group', () => {
     const runtimeRoleId = Object.entries(template.findResources('AWS::IAM::Role')).find(
@@ -114,7 +159,7 @@ describe('runtime IAM scope', () => {
     expect(document).toContain('bedrock:InvokeModel');
     expect(document).toContain('rds-db:connect');
     expect(document).toContain(quanticConfig.embeddingModelId);
-    expect(document).toContain(quanticConfig.chatInferenceProfileId);
+    expect(document).toContain(`inference-profile/${defaultModel.inferenceProfileId}`);
     expect(document).toContain('logs:PutLogEvents');
     expect(document).not.toContain('secretsmanager:');
     expect(document).not.toContain('cafe-fausse');
@@ -122,6 +167,41 @@ describe('runtime IAM scope', () => {
     expect(document).not.toContain('bedrock:*');
     expect(document).toContain('Sid":"XRayAccess');
     expect(document).toContain('Sid":"CloudWatchMetrics');
+  });
+
+  test('allows Converse and InvokeModel on the default chat model in every us. profile region', () => {
+    const document = runtimePolicyDocument(template);
+    for (const action of [
+      'bedrock:InvokeModel',
+      'bedrock:InvokeModelWithResponseStream',
+      'bedrock:Converse',
+      'bedrock:ConverseStream',
+    ]) {
+      expect(document).toContain(`"${action}"`);
+    }
+    for (const region of ['us-east-1', 'us-east-2', 'us-west-2']) {
+      expect(document).toContain(
+        `arn:aws:bedrock:${region}::foundation-model/${defaultModel.foundationModelId}`,
+      );
+    }
+    expect(document).toContain(
+      `arn:aws:bedrock:us-east-2::foundation-model/${quanticConfig.embeddingModelId}`,
+    );
+    expect(document).not.toContain('claude-sonnet-4-5');
+    expect(document).not.toContain('nova-pro');
+  });
+
+  test('scopes the role to Nova Pro instead when quanticChatModel=nova-pro', () => {
+    const document = runtimePolicyDocument(synthesize({ quanticChatModel: 'nova-pro' }));
+    expect(document).toContain('inference-profile/us.amazon.nova-pro-v1:0');
+    expect(document).toContain('arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-pro-v1:0');
+    expect(document).not.toContain('claude-sonnet');
+  });
+
+  test('rejects an unknown chat model', () => {
+    expect(() =>
+      resolveChatModel({ node: { tryGetContext: () => 'claude-sonnet-4-5' } }),
+    ).toThrow(/Unknown quanticChatModel/);
   });
 });
 
