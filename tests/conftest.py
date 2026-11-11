@@ -1,5 +1,11 @@
 # tests/conftest.py
 import os, pytest, psycopg
+# tests/conftest.py — add to what's there
+@pytest.fixture
+def requires_db():
+    if not _database_reachable():
+        pytest.skip("no reachable DATABASE_URL")
+
 
 
 def _database_reachable() -> bool:
@@ -17,3 +23,14 @@ requires_db = pytest.mark.skipif(
     not _database_reachable(),
     reason="no reachable DATABASE_URL; database-backed test skipped",
 )
+
+
+@pytest.fixture
+def requires_db():
+    """Skip a test when no database is reachable.
+
+    A fixture rather than a marker, so a test can request it by name with no
+    import, and so the skip happens before any connection attempt.
+    """
+    if not _database_reachable():
+        pytest.skip("no reachable DATABASE_URL; database-backed test skipped")

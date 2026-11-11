@@ -8,6 +8,12 @@ import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+
+pytestmark = pytest.mark.skipif(
+    not __import__("os").getenv("DATABASE_URL"),
+    reason="no DATABASE_URL; database-backed test skipped",
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_TOOLS = {
     "search_policy_documents",
