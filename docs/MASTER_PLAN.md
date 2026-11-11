@@ -5,7 +5,7 @@
 **Governing delivery path:** [COST_FIRST_DELIVERY_STRATEGY.md](COST_FIRST_DELIVERY_STRATEGY.md). Do not provision billable AWS resources. Implement the same architecture locally first.
 
 ## Core architecture
-Vite React UI + FastAPI BFF (/chat, /health) → AWS Bedrock AgentCore (LangGraph orchestrator) → real MCP client/server tools → Aurora Serverless v2 PostgreSQL + pgvector (policy RAG and synthetic HR records). Bedrock for chat and embeddings. Retain Render for UI/BFF unless a simpler fully automated deployment is justified and approved.
+Vite React UI + FastAPI BFF (/chat, /health) → AWS Bedrock AgentCore (LangGraph orchestrator) → real MCP client/server tools → Aurora Serverless v2 PostgreSQL + pgvector (policy RAG and synthetic HR records). Bedrock for chat and embeddings. Render was dropped on 2026-11-11; UI/BFF hosting stays within the AWS CDK design.
 
 Reuse the AWS CDK TypeScript infrastructure patterns in [Café Fausse](https://github.com/vadaliah/Quantic_Cafe_Fausse_Application); provision an **independent Quantic stack**. Never share Café Fausse application records, secrets, or operational database resources.
 
@@ -25,7 +25,7 @@ No multi-agent architecture, AgentCore Gateway unless required, enterprise HR au
 ## Ownership
 - **A (Infra/Data):** Café Fausse CDK reuse, independent Aurora, private networking, IAM, pgvector, ingestion, AgentCore deployment.
 - **B (Agent/MCP):** tool schemas/server, LangGraph orchestration, Bedrock, deterministic compliance, safety and traces.
-- **C (App/Quality):** React, FastAPI, Render automation, CI, evaluation, docs/demo.
+- **C (App/Quality):** React, FastAPI, deployment automation, CI, evaluation, docs/demo.
 
 ## High-level Gantt (calendar blocks)
 | Stream | Oct 20–23 | Oct 24–27 | Oct 28–31 | Nov 1–4 | Nov 5–8 | Nov 9–11 | Nov 12–14 | Nov 15 |
@@ -47,7 +47,7 @@ No multi-agent architecture, AgentCore Gateway unless required, enterprise HR au
 - **Oct 30:** G2 — two-format policy ingestion and pgvector retrieval with correct citations.
 - **Nov 4:** G3 — both workflows execute locally through actual MCP protocol.
 - **Nov 8:** G4 — feature freeze; both demos operate in integrated UI.
-- **Nov 11:** G5 — public URL verified end to end: Render → AgentCore → MCP → Aurora.
+- **Nov 11:** G5 — public URL verified end to end: UI/BFF → AgentCore → MCP → Aurora.
 - **Nov 13:** G6 — reproducible evaluations, metric tables, ablation, final documentation.
 - **Nov 14:** G7 — video recorded, grader access and submission package verified.
 - **Nov 15:** final submission.

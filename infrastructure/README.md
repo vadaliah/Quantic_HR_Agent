@@ -46,7 +46,7 @@ Availability zone names `us-east-2a` and `us-east-2b` are pinned so synth stays 
 
 This workflow only builds, tests, and synthesizes the CDK app. It has no AWS credentials. Later gates, still on this workflow and still blocked on tests:
 
-1. FastAPI BFF and Vite UI checks, then Render deploy of the BFF. Render stays the host.
+1. FastAPI BFF and Vite UI checks. Render was dropped on 2026-11-11; BFF/UI hosting stays inside the AWS (CDK) design and is still to be decided.
 2. AgentCore runtime configuration using the stack outputs `RuntimeSubnetIds`, `RuntimeSecurityGroupId`, and `RuntimeRoleArn`.
 3. Migration and smoke checks against the new cluster only.
 
