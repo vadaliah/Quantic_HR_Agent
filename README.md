@@ -165,14 +165,19 @@ Café Fausse and AEA stay untouched.
 
 Hosting is Render; follow [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md).
 
+**Status (2026-11-12 ~00:10 CET): not live yet.** The IAM user `quantic-hr-render` with the
+least-privilege policy and its access key exist. The smoke tests passed: Nova Pro Converse, Titan v2,
+and Data API reads (the live DB has 25 employees and 173/173 embedded chunks). Still to do: the AWS
+Budget alert, the Render Blueprint, and a live URL. Do not run `cdk deploy`.
+
 - **AWS side:** an IAM user with `infrastructure/iam/render-app-policy.json` (Bedrock
   `InvokeModel` on Nova Pro and Titan v2, Data API on the one cluster, `GetSecretValue` on the
   one secret) and an AWS Budget alert of about $10. Humans create both; nothing else changes
   in AWS.
 - **Cost:** Render free tier; Aurora stays at 0 ACU when idle (auto-pause after 300 s);
   Bedrock is pay per request.
-- **Model access.** Confirm Nova Pro (the default) is enabled in account `287238357427` with a
-  first call; `CHAT_MODEL=us.anthropic.claude-sonnet-4-6` is the alternative.
+- **Model access.** Nova Pro (the default) is confirmed in account `287238357427` (Converse
+  smoke call, 2026-11-12); `CHAT_MODEL=us.anthropic.claude-sonnet-4-6` is the alternative.
 - **Teardown after grading:** delete the IAM access key (or user) and suspend or delete the
   Render service. The Aurora cluster is Hiren's and stays as is.
 

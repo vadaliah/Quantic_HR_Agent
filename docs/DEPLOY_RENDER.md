@@ -13,6 +13,33 @@ Browser → Render web service (React UI + FastAPI /chat, LangGraph tool loop, s
                                            credentials from the Secrets Manager secret
 ```
 
+## Current state (2026-11-12, ~00:10 CET)
+
+**Not live yet.** There is no Render service and no URL.
+
+| Item | State |
+| --- | --- |
+| IAM user `arn:aws:iam::287238357427:user/quantic-hr-render` (tags `project=quantic-hr-agent`, `purpose=render-app`, `delete-after=grading`) | ✅ Done |
+| Inline policy `render-app-least-privilege` = `infrastructure/iam/render-app-policy.json` at `23f5b92` | ✅ Done |
+| IAM policy simulator: `rds-data:ExecuteStatement` (cluster), `secretsmanager:GetSecretValue` (secret), `bedrock:InvokeModel` (Titan v2) **allowed**; `rds:DeleteDBCluster`, `secretsmanager:PutSecretValue`, `s3:ListAllMyBuckets` **denied** | ✅ Done |
+| One access key (Active), stored outside the repo by the repo owner's collaborator; goes only into Render env (`sync: false`) | ✅ Done; rotate/delete after grading |
+| Smoke with that key: STS identity = `user/quantic-hr-render`; Bedrock Converse on `us.amazon.nova-pro-v1:0` OK (**Nova Pro access confirmed** in the account); Titan v2 `InvokeModel` OK | ✅ Done |
+| Data API first call returned `DatabaseResumingException` (auto-pause wake), then succeeded; the app retries for up to 60 s | ✅ Observed |
+| Read-only Data API check of the live database (SELECT only, counts only; see below) | ✅ Done |
+| AWS Budget alert (~US$10) | ⏳ Pending (alert email to be provided) |
+| Render Blueprint created, key pasted, deployed | ⏳ Pending |
+| Live URL in `deployed.md`, `/health` shows `database.ok: true`, two demo tasks checked | ⏳ Pending |
+
+**Live database, read-only check (2026-11-12 ~00:15 CET, as `quantic-hr-render`, SELECT only):**
+
+- Public tables: `agent_runs`, `benefits`, `employees`, `locations`, `managers`, `policy_chunks`, `policy_documents`, `pto_accruals`, `pto_balances`, `pto_blackouts`, `tickets`.
+- `employees`: 25 rows, IDs `E1001`–`E1025`. `pto_accruals`: 25 rows. `pto_balance_as_of()` exists (1 row in `pg_proc`). pgvector 0.8.0.
+- `policy_documents`: 16. `policy_chunks`: 173, **all 173 with an embedding**, all 1024 dimensions. This matches Titan v2, so vector retrieval works without any ingest.
+- Note: the live database holds 16 documents / 173 chunks, while this branch's `corpus/` has 12 documents / 134 chunks. The live data was loaded separately; do not re-ingest from this branch without Hiren's go.
+
+Unchanged: Hiren's `QuanticHrAgentStack` is untouched (deletion protection on, snapshot
+`quantic-hr-agent-pre-update-20261111-2326`). The ECR image was deleted. There was no `cdk deploy`.
+
 ## Do NOT run `cdk deploy` from this branch
 
 The read-only `cdk diff` of 2026-11-11 ([evidence/cdk-diff-2026-11-11.txt](evidence/cdk-diff-2026-11-11.txt))
@@ -101,11 +128,9 @@ Optional Sonnet 4.6 alternative (add only if `CHAT_MODEL` switches):
   the database, so it does not keep Aurora awake.
 - Before a demo or grading session, open `/health` once and wait for `database.ok: true`.
 
-## Open checks (not yet verified against the live database)
+## Open checks
 
-- The live schema and data must match what the tools query (`pto_accruals`,
-  `pto_balance_as_of()`, employee IDs `E1001`-`E1025`, `policy_chunks.embedding`). Nobody has
-  run a query against the live database from this branch; that is a read and needs Hiren's go.
-- If `policy_chunks` has no embeddings, retrieval falls back to keyword search automatically.
-  Loading embeddings is an ingest (a write) and is **not** part of this change.
-- Nova Pro model access in account `287238357427` is still to be confirmed with a first call.
+- ~~Live schema and data match the tools~~ — verified read-only on 2026-11-12 (see Current state).
+- ~~Embeddings present~~ — 173/173 chunks embedded (1024-d); no ingest needed.
+- ~~Nova Pro model access~~ — confirmed by a Converse smoke call on 2026-11-12.
+- Still open: the end-to-end `/chat` answers and citations on the live Render URL, and measured cold-start times.
