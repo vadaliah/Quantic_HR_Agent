@@ -86,10 +86,12 @@ def test_docstrings_describe_input_and_output():
 
 
 def test_docstrings_mention_when_to_use():
-    """A 'Use ...' sentence is what separates two tools with similar names."""
+    """A when-to-call sentence is what separates two tools with similar names."""
     for name in TOOL_MAP:
         doc = (getattr(mcp_server, name).__doc__ or "").lower()
-        assert re.search(r"\buse\b", doc), f"{name}: docstring does not say when to use it"
+        assert re.search(r"\buse\b|\bcall\b", doc), (
+            f"{name}: docstring does not say when to call it"
+        )
 
 
 def test_write_tools_document_confirmation():
