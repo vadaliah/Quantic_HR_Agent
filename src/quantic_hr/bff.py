@@ -23,9 +23,6 @@ import uuid
 from collections import defaultdict, deque
 from fastapi import HTTPException, Path
 from fastapi.responses import FileResponse, HTMLResponse
-from quantic_hr.evaluation import load_results
-
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -43,13 +40,11 @@ WARMUP_ATTEMPTS = 3
 WARMUP_DELAY = 5
 
 
-
-
 app = FastAPI(title="Quantic HR BFF", version="0.7.0")
+
 
 from quantic_hr.evaluation import ROOT as REPO_ROOT, load_results
 DASHBOARD_HTML = REPO_ROOT / "web" / "evaluation_dashboard.html"
-
 
 
 _origins = os.environ.get(
