@@ -71,7 +71,7 @@ describe('Aurora encryption and database ingress', () => {
       DatabaseName: 'quantic_hr_agent',
       Engine: 'aurora-postgresql',
       EngineVersion: '17.4',
-      DeletionProtection: false,
+      DeletionProtection: true,
       ServerlessV2ScalingConfiguration: {
         MinCapacity: 0.5,
         MaxCapacity: 2,
@@ -82,21 +82,25 @@ describe('Aurora encryption and database ingress', () => {
     });
   });
 
-  test('lets cdk destroy remove the demo cluster by default', () => {
+  test('protects and retains the live cluster and its secret by default', () => {
     const clusters = Object.values(template.findResources('AWS::RDS::DBCluster')) as Array<{
       DeletionPolicy?: string;
     }>;
     expect(clusters).toHaveLength(1);
-    expect(clusters[0].DeletionPolicy).toBe('Delete');
-  });
-
-  test('keeps and retains the cluster when deletion protection is requested', () => {
-    const protectedTemplate = synthesize({ quanticDeletionProtection: 'true' });
-    protectedTemplate.hasResourceProperties('AWS::RDS::DBCluster', { DeletionProtection: true });
-    const clusters = Object.values(protectedTemplate.findResources('AWS::RDS::DBCluster')) as Array<{
+    expect(clusters[0].DeletionPolicy).toBe('Retain');
+    const secrets = Object.values(template.findResources('AWS::SecretsManager::Secret')) as Array<{
       DeletionPolicy?: string;
     }>;
-    expect(clusters[0].DeletionPolicy).toBe('Retain');
+    expect(secrets[0].DeletionPolicy).toBe('Retain');
+  });
+
+  test('lets cdk destroy remove a throwaway cluster only when asked', () => {
+    const throwaway = synthesize({ quanticDeletionProtection: 'false' });
+    throwaway.hasResourceProperties('AWS::RDS::DBCluster', { DeletionProtection: false });
+    const clusters = Object.values(throwaway.findResources('AWS::RDS::DBCluster')) as Array<{
+      DeletionPolicy?: string;
+    }>;
+    expect(clusters[0].DeletionPolicy).toBe('Delete');
   });
 
   test('rejects an unknown deletion protection value', () => {

@@ -1,4 +1,4 @@
-import { RemovalPolicy } from 'aws-cdk-lib';
+import { CfnResource, RemovalPolicy } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -54,6 +54,14 @@ export class DatabaseConstruct extends Construct {
       throw new Error('Database secret was not created');
     }
 
+    // Keep the admin secret with a protected cluster, as the deployed stack does
+    // (same approach as feature/independent-aurora-database).
+    const generatedSecret = this.cluster.node.tryFindChild('Secret')?.node.defaultChild;
+    if (CfnResource.isCfnResource(generatedSecret)) {
+      generatedSecret.applyRemovalPolicy(
+        props.deletionProtection ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+      );
+    }
     this.secret = this.cluster.secret;
   }
 }

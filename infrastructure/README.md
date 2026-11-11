@@ -58,4 +58,4 @@ Do not bootstrap a second toolkit. Step 0 already found CDKToolkit in this accou
 | --- | --- | --- |
 | `quanticChatModel` | `nova-pro` | Scopes the runtime role to this model. Set the app's `BEDROCK_CHAT_INFERENCE_PROFILE` to the `ChatInferenceProfileId` output. `claude-sonnet-4-6` is the alternative. Confirm Nova Pro access in 287238357427 before deploy. |
 | `quanticRuntimeImage` | `agent` | `agent` builds and pushes the Dockerfile image at deploy time; `hello-world` uses the code-deployed Hello World runtime. |
-| `quanticDeletionProtection` | `false` | Off for the time-limited demo, so `cdk destroy` deletes Aurora. `true` turns deletion protection on and retains the cluster on stack delete. |
+| `quanticDeletionProtection` | `true` | On: the deployed stack's cluster holds live data, so it is protected and, with its admin secret, retained on stack delete. `false` only for a throwaway stack. |

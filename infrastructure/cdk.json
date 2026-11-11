@@ -19,7 +19,7 @@
   "context": {
     "quanticDatabaseMode": "create",
     "quanticChatModel": "nova-pro",
-    "quanticDeletionProtection": "false",
+    "quanticDeletionProtection": "true",
     "quanticRuntimeImage": "agent",
     "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
     "@aws-cdk/aws-apigateway:authorizerChangeDeploymentLogicalId": true,

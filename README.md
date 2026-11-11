@@ -152,9 +152,12 @@ Do not run `scripts/deploy-sandbox.sh`. Café Fausse and AEA stay untouched.
 
 ## Deployment and teardown
 
-**Nothing is deployed** (as of 2026-11-11). The target is `QuanticHrAgentStack` in account
-`287238357427`, `us-east-2` (VPC with one NAT gateway, Aurora Serverless v2 with pgvector,
-the runtime role, AgentCore).
+**`QuanticHrAgentStack` is already deployed** in account `287238357427`, `us-east-2`
+(created 2026-11-03; Aurora database `quantic_hr_agent` holds live data). Never run a deploy,
+migration or ingest against it without the owner's go, and run a read-only `cdk diff` first:
+any replace or destroy on the cluster, its instance, subnet group, security group or secret
+must be fixed in code before deploying. The stack contains a VPC with one NAT gateway, Aurora Serverless v2 with pgvector,
+the runtime role and AgentCore.
 
 - **Sponsor approval first.** No deploy without the sponsor's explicit go.
 - **Time-limited exposure.** Agree the deploy and teardown dates before deploying. The stack
@@ -170,9 +173,8 @@ the runtime role, AgentCore).
   `docker buildx build --platform linux/arm64 -t quantic-hr-agent .`
   `-c quanticRuntimeImage=hello-world` deploys the Hello World runtime instead.
 - **Teardown.** `cd infrastructure && npx cdk destroy QuanticHrAgentStack`. Aurora deletion
-  protection is off by default (`quanticDeletionProtection=false`) so the cluster is deleted
-  with no final snapshot. If it was deployed with `-c quanticDeletionProtection=true`, the
-  cluster is retained: turn protection off and delete it explicitly. The runtime log group
+  protection is on by default (`quanticDeletionProtection=true`), so the cluster and its admin
+  secret are retained and the data survives; deleting them is a separate, explicit decision. The runtime log group
   `/quantic-hr-agent/dev/runtime` is retained by design and the admin secret enters Secrets
   Manager's recovery window; remove or wait them out after grading. **ECR images in the
   bootstrap repository are not removed by `cdk destroy`**: delete the agent image tags from

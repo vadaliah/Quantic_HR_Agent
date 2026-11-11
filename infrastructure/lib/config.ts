@@ -75,14 +75,15 @@ export function resolveChatModel(scope: ContextScope): ChatModel {
 }
 
 /**
- * Aurora deletion protection. Off by default: this is a time-limited dev demo and
- * `cdk destroy` must be able to remove the cluster after grading. Pass
- * `-c quanticDeletionProtection=true` to keep the cluster (and retain it on stack delete).
+ * Aurora deletion protection. ON by default: QuanticHrAgentStack is already deployed
+ * in 287238357427 and its cluster holds live data. With protection on, the cluster
+ * and its admin secret are also retained if the stack is deleted. Only for a fresh,
+ * throwaway stack pass `-c quanticDeletionProtection=false` so `cdk destroy` removes it.
  */
 export function resolveDeletionProtection(scope: ContextScope): boolean {
   const raw = scope.node.tryGetContext('quanticDeletionProtection');
   if (raw === undefined || raw === null || raw === '') {
-    return false;
+    return true;
   }
   const value = String(raw).toLowerCase();
   if (['true', 'yes', '1'].includes(value)) {
