@@ -19,11 +19,11 @@ def test_defaults_match_single_model_setting(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.delenv("BEDROCK_EMBEDDING_MODEL", raising=False)
     monkeypatch.delenv("AWS_REGION", raising=False)
     monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
-    assert bedrock.chat_model_id() == "us.anthropic.claude-sonnet-4-6"
+    assert bedrock.chat_model_id() == "us.amazon.nova-pro-v1:0"
     assert bedrock.embedding_model_id() == "amazon.titan-embed-text-v2:0"
     assert bedrock.region() == "us-east-2"
-    monkeypatch.setenv("BEDROCK_CHAT_INFERENCE_PROFILE", "us.amazon.nova-pro-v1:0")
-    assert bedrock.chat_model_id() == "us.amazon.nova-pro-v1:0"
+    monkeypatch.setenv("BEDROCK_CHAT_INFERENCE_PROFILE", "us.anthropic.claude-sonnet-4-6")
+    assert bedrock.chat_model_id() == "us.anthropic.claude-sonnet-4-6"
 
 
 def test_embed_requests_1024_normalized_titan_v2() -> None:

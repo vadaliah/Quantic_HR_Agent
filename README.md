@@ -14,7 +14,7 @@ private connection for the application. Local Postgres scripts, the local schema
 | React UI (Vite) | Local (port 5173) or a static host |
 | FastAPI BFF + LangGraph + MCP | Local process or a deployed service |
 | Postgres + pgvector | Aurora Serverless v2, `us-east-2`, database `quantic_hr_agent` |
-| Embeddings + chat | Amazon Bedrock: Titan Text Embeddings v2 (1024 dims) and one chat model, default Claude Sonnet 4.6 (`us.anthropic.claude-sonnet-4-6`) |
+| Embeddings + chat | Amazon Bedrock: Titan Text Embeddings v2 (1024 dims) and one chat model, default Amazon Nova Pro (`us.amazon.nova-pro-v1:0`) |
 
 ```text
 Vite (5173) → FastAPI /chat /health → LangGraph → Bedrock Converse tool-use loop
@@ -35,14 +35,18 @@ One chat model is used at a time. `BEDROCK_CHAT_INFERENCE_PROFILE` (app) and the
 
 | Model | App setting | CDK context | Status in us-east-2 (checked 2026-11-11) |
 | --- | --- | --- | --- |
-| Claude Sonnet 4.6 (default) | `us.anthropic.claude-sonnet-4-6` | `claude-sonnet-4-6` | Active via `us.` profile; Claude access recorded in `docs/STEP0_AWS_FINDINGS.md` |
-| Amazon Nova Pro (alternative) | `us.amazon.nova-pro-v1:0` | `nova-pro` | Active via `us.` profile only; access in 287238357427 not yet confirmed |
+| Amazon Nova Pro (default) | `us.amazon.nova-pro-v1:0` | `nova-pro` | Active via `us.` profile only; access in 287238357427 **not yet confirmed** |
+| Claude Sonnet 4.6 (alternative) | `us.anthropic.claude-sonnet-4-6` | `claude-sonnet-4-6` | Active via `us.` profile; Claude access recorded in `docs/STEP0_AWS_FINDINGS.md` |
+
+> **Before deploy:** confirm Nova Pro model access is enabled in account `287238357427`
+> (us-east-2). `docs/STEP0_AWS_FINDINGS.md` records only Titan and Claude. If it is not
+> enabled, enable it or switch both settings to Claude Sonnet 4.6.
 
 Claude Sonnet 4.5 is marked Legacy in Bedrock and is no longer configured.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `BEDROCK_CHAT_INFERENCE_PROFILE` | `us.anthropic.claude-sonnet-4-6` | Chat model (see above) |
+| `BEDROCK_CHAT_INFERENCE_PROFILE` | `us.amazon.nova-pro-v1:0` | Chat model (see above) |
 | `BEDROCK_EMBEDDING_MODEL` | `amazon.titan-embed-text-v2:0` | Embeddings, 1024 dims, normalized |
 | `AWS_REGION` | `us-east-2` | Bedrock region |
 | `QUANTIC_AGENT_MODE` | `auto` | `auto` (Bedrock when AWS credentials exist), `bedrock`, `keyword` |
@@ -153,8 +157,9 @@ the runtime role, AgentCore).
 - **Time-limited exposure.** Agree the deploy and teardown dates before deploying. The stack
   costs roughly $75 a month while it is up (Aurora 0.5 ACU floor plus the NAT gateway), before
   Bedrock usage, so keep the window to the grading period.
-- **Model access.** Confirm the chosen chat model is enabled in the account (Nova Pro is not yet
-  confirmed) and deploy with the matching context, for example `-c quanticChatModel=claude-sonnet-4-6`.
+- **Model access.** Confirm Nova Pro (the default) is enabled in account `287238357427` before
+  deploying; it is not yet confirmed. To use Claude instead, deploy with
+  `-c quanticChatModel=claude-sonnet-4-6` and set `BEDROCK_CHAT_INFERENCE_PROFILE` to match.
 - **Teardown.** `cd infrastructure && npx cdk destroy QuanticHrAgentStack`. Aurora deletion
   protection is off by default (`quanticDeletionProtection=false`) so the cluster is deleted
   with no final snapshot. If it was deployed with `-c quanticDeletionProtection=true`, the

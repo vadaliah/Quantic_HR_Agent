@@ -18,7 +18,7 @@
   },
   "context": {
     "quanticDatabaseMode": "create",
-    "quanticChatModel": "claude-sonnet-4-6",
+    "quanticChatModel": "nova-pro",
     "quanticDeletionProtection": "false",
     "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
     "@aws-cdk/aws-apigateway:authorizerChangeDeploymentLogicalId": true,

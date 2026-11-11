@@ -11,9 +11,9 @@ services:
       - key: AWS_REGION
         value: us-east-2
       # Same single chat model as .env.example and infrastructure/lib/config.ts.
-      # Alternative: us.amazon.nova-pro-v1:0 (switch all three together).
+      # Alternative: us.anthropic.claude-sonnet-4-6 (switch all three together).
       - key: BEDROCK_CHAT_INFERENCE_PROFILE
-        value: us.anthropic.claude-sonnet-4-6
+        value: us.amazon.nova-pro-v1:0
       - key: BEDROCK_EMBEDDING_MODEL
         value: amazon.titan-embed-text-v2:0
       - key: CLUSTER_ARN

@@ -13,8 +13,8 @@ export const quanticConfig = {
   adminUsername: 'quantic_hr_admin',
   runtimeDbUsername: 'quantic_hr_agent',
   secretName: 'quantic-hr-agent/dev/database/admin',
-  /** Default chat model key; override with `-c quanticChatModel=nova-pro`. See chatModels below. */
-  defaultChatModel: 'claude-sonnet-4-6',
+  /** Default chat model key; override with `-c quanticChatModel=claude-sonnet-4-6`. See chatModels below. */
+  defaultChatModel: 'nova-pro',
   embeddingModelId: 'amazon.titan-embed-text-v2:0',
   embeddingDimensions: 1024,
   blockedStackNames: ['CafeFausseApplicationStack', 'AeaSandboxStack'],
@@ -37,9 +37,10 @@ export const quanticConfig = {
  * model through `-c quanticChatModel=<key>`. Keep the two in step.
  *
  * Verified in us-east-2 on 2026-11-11 (model catalog, not account access):
- * - claude-sonnet-4-6: ACTIVE through the us. profile. Default.
- * - nova-pro: ACTIVE through the us. profile only. Access in 287238357427 is not
- *   yet confirmed (docs/STEP0_AWS_FINDINGS.md lists only Titan and Claude).
+ * - nova-pro: ACTIVE through the us. profile only. Default (team decision 2026-11-11).
+ *   Access in 287238357427 is not yet confirmed (docs/STEP0_AWS_FINDINGS.md lists
+ *   only Titan and Claude): confirm it is enabled there before any deploy.
+ * - claude-sonnet-4-6: ACTIVE through the us. profile. Selectable alternative.
  * Claude Sonnet 4.5 is marked LEGACY in Bedrock and is no longer offered here.
  */
 export const chatModels = {

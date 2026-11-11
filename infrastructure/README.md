@@ -27,7 +27,7 @@ That mode omits new RDS/secret/admin-host resources and does not add security-gr
 - New VPC `10.20.0.0/16`, one NAT gateway, private subnets for the future AgentCore ENIs, and isolated subnets for Aurora.
 - Aurora PostgreSQL 17.4 Serverless v2 (0.5–2 ACU), encrypted, IAM auth, database `quantic_hr`, secret `quantic-hr-agent/dev/database/admin`.
 - SSM admin host (`t4g.nano`) in a private subnet. Its AMI is an SSM parameter resolved at deploy time.
-- Runtime role `quantic-hr-agent-dev-runtime`, scoped to one chat model (`-c quanticChatModel`, default `claude-sonnet-4-6`, alternative `nova-pro`) through its `us.` inference profile and foundation model in us-east-1/us-east-2/us-west-2, Titan Text Embeddings v2 in us-east-2, `rds-db:connect` as `quantic_hr_agent`, and one log group.
+- Runtime role `quantic-hr-agent-dev-runtime`, scoped to one chat model (`-c quanticChatModel`, default `nova-pro`, alternative `claude-sonnet-4-6`) through its `us.` inference profile and foundation model in us-east-1/us-east-2/us-west-2, Titan Text Embeddings v2 in us-east-2, `rds-db:connect` as `quantic_hr_agent`, and one log group.
 - AgentCore runtime `QuanticHelloWorld` (`networkMode=VPC`, HTTP `/ping` and `/invocations`). Direct code deploy of `runtime/hello_world`. No model or database call.
 
 SQL under `database/migrations/` is not applied here. The first live session, after approval, is still a read-only check of `pg_available_extensions` before `CREATE EXTENSION vector`.
@@ -56,5 +56,5 @@ Do not bootstrap a second toolkit. Step 0 already found CDKToolkit in this accou
 
 | Context key | Default | Effect |
 | --- | --- | --- |
-| `quanticChatModel` | `claude-sonnet-4-6` | Scopes the runtime role to this model. Set the app's `BEDROCK_CHAT_INFERENCE_PROFILE` to the `ChatInferenceProfileId` output. `nova-pro` is the alternative. |
+| `quanticChatModel` | `nova-pro` | Scopes the runtime role to this model. Set the app's `BEDROCK_CHAT_INFERENCE_PROFILE` to the `ChatInferenceProfileId` output. `claude-sonnet-4-6` is the alternative. Confirm Nova Pro access in 287238357427 before deploy. |
 | `quanticDeletionProtection` | `false` | Off for the time-limited demo, so `cdk destroy` deletes Aurora. `true` turns deletion protection on and retains the cluster on stack delete. |

@@ -3,7 +3,7 @@
 Configuration comes from the environment so the app, the MCP server and the
 ingest script all use the same single model setting:
 
-- ``BEDROCK_CHAT_INFERENCE_PROFILE``: chat inference profile id. Must match the
+- ``BEDROCK_CHAT_INFERENCE_PROFILE``: chat inference profile id (default Nova Pro). Must match the
   CDK context ``quanticChatModel`` so the runtime role allows it.
 - ``BEDROCK_EMBEDDING_MODEL``: embedding model id (Titan Text Embeddings v2).
 - ``AWS_REGION``: Bedrock region, default ``us-east-2``.
@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Any
 
 DEFAULT_REGION = "us-east-2"
-DEFAULT_CHAT_INFERENCE_PROFILE = "us.anthropic.claude-sonnet-4-6"
+DEFAULT_CHAT_INFERENCE_PROFILE = "us.amazon.nova-pro-v1:0"
 DEFAULT_EMBEDDING_MODEL = "amazon.titan-embed-text-v2:0"
 EMBEDDING_DIMENSIONS = 1024  # matches policy_chunks.embedding vector(1024)
 TITAN_V2_DIMENSIONS = (256, 512, 1024)

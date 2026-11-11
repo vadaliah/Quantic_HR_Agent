@@ -140,7 +140,7 @@ function runtimePolicyDocument(template: Template): string {
 
 describe('runtime IAM scope', () => {
   const template = synthesize();
-  const defaultModel = chatModels['claude-sonnet-4-6'];
+  const defaultModel = chatModels['nova-pro'];
 
   test('limits the runtime role to selected models, IAM database auth, and its log group', () => {
     const runtimeRoleId = Object.entries(template.findResources('AWS::IAM::Role')).find(
@@ -187,15 +187,14 @@ describe('runtime IAM scope', () => {
     expect(document).toContain(
       `arn:aws:bedrock:us-east-2::foundation-model/${quanticConfig.embeddingModelId}`,
     );
-    expect(document).not.toContain('claude-sonnet-4-5');
-    expect(document).not.toContain('nova-pro');
+    expect(document).not.toContain('claude-sonnet');
   });
 
-  test('scopes the role to Nova Pro instead when quanticChatModel=nova-pro', () => {
-    const document = runtimePolicyDocument(synthesize({ quanticChatModel: 'nova-pro' }));
-    expect(document).toContain('inference-profile/us.amazon.nova-pro-v1:0');
-    expect(document).toContain('arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-pro-v1:0');
-    expect(document).not.toContain('claude-sonnet');
+  test('scopes the role to Claude Sonnet 4.6 instead when quanticChatModel=claude-sonnet-4-6', () => {
+    const document = runtimePolicyDocument(synthesize({ quanticChatModel: 'claude-sonnet-4-6' }));
+    expect(document).toContain('inference-profile/us.anthropic.claude-sonnet-4-6');
+    expect(document).toContain('arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6');
+    expect(document).not.toContain('nova-pro');
   });
 
   test('rejects an unknown chat model', () => {
