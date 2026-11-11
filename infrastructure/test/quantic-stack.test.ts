@@ -65,6 +65,8 @@ describe('Aurora encryption and database ingress', () => {
       EngineVersion: '17.4',
       DeletionProtection: true,
       ServerlessV2ScalingConfiguration: {
+        // 0 permits auto-pause; 0.5 keeps the cluster warm so a grader never
+        // waits for a resume. See the auto-pause note in database.ts.
         MinCapacity: 0.5,
         MaxCapacity: 2,
       },

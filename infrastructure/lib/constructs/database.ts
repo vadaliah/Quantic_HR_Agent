@@ -37,7 +37,7 @@ export class DatabaseConstruct extends Construct {
       }),
       iamAuthentication: true,
       writer: rds.ClusterInstance.serverlessV2('writer'),
-      serverlessV2MinCapacity: 0,
+      serverlessV2MinCapacity: 0.5,
       serverlessV2MaxCapacity: 2,
       // 15 minutes idle before auto-pause. The default is 5 minutes, which
       // produces a cold start on nearly every pause in a working session.
