@@ -6,6 +6,7 @@ what the tool returns, when to use it, and the policy it maps to — that is wha
 makes tool selection reliable rather than a guess from the name.
 """
 from __future__ import annotations
+from quantic_hr.tools import MIN_SCORE
 
 from typing import Any
 
@@ -19,7 +20,7 @@ mcp = FastMCP("quantic-hr")
 @mcp.tool()
 def search_policy_documents(query: str, limit: int = 5,
                             document_id: str | None = None,
-                            min_score: float = 0.35) -> dict[str, Any]:
+                            min_score: float = MIN_SCORE) -> dict[str, Any]:
     """Search HR policy documents and return cited passages.
 
     Args:
@@ -41,7 +42,8 @@ def search_policy_documents(query: str, limit: int = 5,
     the user the policy does not cover the question instead of answering from
     general knowledge.
     """
-    return tools.search_policy_documents(query, limit, document_id, min_score)
+    kwargs = {} if min_score is None else {"min_score": min_score}
+    return tools.search_policy_documents(query, limit, document_id, **kwargs)
 
 
 @mcp.tool()

@@ -30,3 +30,4 @@ infrastructure/database/migrations/008_policy_vectors.sql
 
 # runtime state
 .run/
+evaluation/results/transcripts/

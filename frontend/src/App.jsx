@@ -1,13 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 const API = import.meta.env.VITE_API_URL || "http" + "://127.0.0.1" + ":8000";
-
-const EMPLOYEES = [
-  { id: "E1007", label: "E1007 — remote-eligible, NY" },
-  { id: "E1012", label: "E1012 — ample PTO" },
-  { id: "E1019", label: "E1019 — low PTO" },
-  { id: "E1024", label: "E1024 — on-site role" },
-];
 
 const DEMOS = [
   { label: "Remote work abroad", employee: "E1007", message: "Can I work from Portugal for six weeks?" },
@@ -18,7 +11,7 @@ const DEMOS = [
 const S = {
   page: {
     fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
-    maxWidth: 1280, margin: "0 auto", padding: "0 24px 190px",
+    maxWidth: 1280, margin: "0 auto", padding: "0 24px 120px",
     color: "#0f172a", background: "#eef2f7", minHeight: "100vh",
   },
   label: {
@@ -30,6 +23,10 @@ const S = {
     fontSize: 12, color: "#1e293b", wordBreak: "break-word",
   },
   pre: { whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0 },
+  control: {
+    borderRadius: 9, border: "2px solid #94a3b8", padding: "6px 9px",
+    fontSize: 13, fontWeight: 600, background: "#fff",
+  },
 };
 
 const ACCENT = {
@@ -38,8 +35,6 @@ const ACCENT = {
   evidence: { solid: "#047857", soft: "#dcfce9", border: "#8fd9b8" },
 };
 
-/* A panel that reads as a physical card: thick accent edge, heavy border,
-   offset shadow. The accent colour is the panel's identity. */
 function Panel({ title, count, accent, children }) {
   return (
     <section style={{
@@ -116,8 +111,7 @@ function ResultHeadline({ turn }) {
         {decision.detail}
       </div>
       {decision.reason && (
-        <div style={{ fontSize: 14.5, color: "#334155", marginTop: 9,
-                      fontWeight: 500 }}>
+        <div style={{ fontSize: 14.5, color: "#334155", marginTop: 9, fontWeight: 500 }}>
           {decision.reason}
         </div>
       )}
@@ -138,9 +132,9 @@ function ResultHeadline({ turn }) {
   );
 }
 
-/* Tool calls and decisions only. The model's own narration is deliberately not
-   rendered: it is unverified, and it has stated policy obligations that do not
-   exist in the corpus. Everything shown here is built from tool output. */
+/* Tool calls and decisions only. The model's own narration is not rendered: it
+   is unverified, and it has stated policy obligations that do not exist in the
+   corpus. Everything shown here is built from tool output. */
 function DecisionPath({ turn }) {
   const visible = (turn.steps || []).filter(
     (s) => ["tool_call", "decision", "escalation", "clarification", "confirmation"]
@@ -156,7 +150,7 @@ function DecisionPath({ turn }) {
       {visible.map((step, i) => (
         <li key={i} style={{ marginBottom: 14, fontSize: 13.5 }}>
           <Chip kind={step.kind} />
-          {step.kind === "tool_call" && (
+          {step.kind === "tool_call" ? (
             <>
               <code style={{ fontWeight: 800, marginLeft: 7, color: "#6d28d9",
                              fontSize: 13.5 }}>
@@ -169,8 +163,7 @@ function DecisionPath({ turn }) {
                 {JSON.stringify(step.arguments)}
               </div>
             </>
-          )}
-          {step.kind !== "tool_call" && (
+          ) : (
             <div style={{ marginTop: 6 }}>
               <strong style={{ fontSize: 14 }}>{step.detail}</strong>
               {step.reason && (
@@ -276,6 +269,7 @@ function Turn({ turn, expanded, onToggle }) {
           <div>
             <div style={{ ...S.label, color: "#64748b", marginBottom: 6 }}>
               Question · {turn.employee_id}
+              {turn.latency_ms ? ` · ${turn.latency_ms} ms` : ""}
             </div>
             <div style={{ fontSize: 16, fontWeight: 700, ...S.pre }}>{turn.question}</div>
           </div>
@@ -346,14 +340,43 @@ function Turn({ turn, expanded, onToggle }) {
 
 export default function App() {
   const [employeeId, setEmployeeId] = useState("E1007");
+  const [employees, setEmployees] = useState([]);
+  const [employeeError, setEmployeeError] = useState("");
   const [message, setMessage] = useState("Can I work from Portugal for six weeks?");
   const [turns, setTurns] = useState([]);
   const [threadId, setThreadId] = useState(null);
+  const [threads, setThreads] = useState([]);
   const [openTurn, setOpenTurn] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function ask(question, employee) {
+  // Employees come from the database, so the dropdown cannot drift from the
+  // seeded records that the compliance logic reads.
+  useEffect(() => {
+    fetch(`${API}/employees`)
+      .then((r) => r.json())
+      .then((d) => {
+        const rows = d.employees || [];
+        setEmployees(rows);
+        if (rows.length) {
+          setEmployeeId((current) =>
+            rows.some((e) => e.employee_id === current)
+              ? current
+              : rows[0].employee_id);
+        }
+      })
+      .catch((err) => setEmployeeError(String(err)));
+  }, []);
+
+  // Session threads, refreshed after each run so a new one appears immediately.
+  useEffect(() => {
+    fetch(`${API}/threads`)
+      .then((r) => r.json())
+      .then((d) => setThreads(d.threads || []))
+      .catch(() => setThreads([]));
+  }, [turns.length]);
+
+  async function ask(question, employee, forcedThread = null) {
     if (!question.trim() || busy) return;
     setError("");
     setBusy(true);
@@ -361,7 +384,11 @@ export default function App() {
       const response = await fetch(`${API}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: question, employee_id: employee, thread_id: threadId }),
+        body: JSON.stringify({
+          message: question,
+          employee_id: employee,
+          thread_id: forcedThread ?? threadId,
+        }),
       });
       if (!response.ok) {
         setError(`BFF error ${response.status}`);
@@ -378,6 +405,28 @@ export default function App() {
       setError(String(err));
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Reopen a session thread: clear the view, render its stored turns, and point
+  // the composer at its last question. Nothing is executed — the user decides
+  // whether to re-run it.
+  async function loadThread(idToLoad) {
+    if (busy || !idToLoad) return;
+    setError("");
+    try {
+      const detail = await fetch(`${API}/thread/${idToLoad}`).then((r) => r.json());
+      const stored = detail.turns || [];
+      setTurns(stored.slice(-6));
+      setOpenTurn(stored.length ? stored.length - 1 : null);
+      setThreadId(idToLoad);
+      const last = stored[stored.length - 1];
+      if (last) {
+        setMessage(last.question || "");
+        if (last.employee_id) setEmployeeId(last.employee_id);
+      }
+    } catch (err) {
+      setError(String(err));
     }
   }
 
@@ -418,25 +467,61 @@ export default function App() {
               {d.label}
             </button>
           ))}
-          {turns.length > 0 && (
-            <button type="button"
-              onClick={() => { setTurns([]); setThreadId(null); setOpenTurn(null); }}
-              style={{
-                background: "#fff", border: "2px solid #94a3b8", borderRadius: 10,
-                padding: "7px 14px", fontSize: 13, fontWeight: 700, color: "#475569",
-                cursor: "pointer", boxShadow: "0 3px 0 0 #cbd5e1",
-              }}>
-              New thread
-            </button>
-          )}
+          <button type="button"
+            onClick={() => { setTurns([]); setThreadId(null); setOpenTurn(null); }}
+            style={{
+              background: "#fff", border: "2px solid #94a3b8", borderRadius: 10,
+              padding: "7px 14px", fontSize: 13, fontWeight: 700, color: "#475569",
+              cursor: "pointer", boxShadow: "0 3px 0 0 #cbd5e1",
+            }}>
+            New thread
+          </button>
+          <label style={{ fontSize: 13, color: "#334155", fontWeight: 600 }}>
+            Threads{" "}
+            <select value="" disabled={busy || threads.length === 0}
+              onChange={(e) => loadThread(e.target.value)}
+              style={S.control}>
+              <option value="">
+                {threads.length === 0
+                  ? "none yet"
+                  : threadId ? `current ${threadId}` : "select…"}
+              </option>
+              {threads.map((t) => (
+                <option key={t.thread_id} value={t.thread_id}>
+                  {t.thread_id} · {t.turns} turn{t.turns === 1 ? "" : "s"} —{" "}
+                  {String(t.first_question).slice(0, 40)}
+                </option>
+              ))}
+            </select>
+          </label>
           <label style={{ marginLeft: "auto", fontSize: 13, color: "#334155",
                           fontWeight: 600 }}>
+              <a href={`${API}/evaluation`} target="_blank" rel="noreferrer"
+   style={{ marginLeft: "auto", fontSize: 12, fontWeight: 800, color: "#4f46e5",
+            border: "2px solid #c7d2fe", background: "#eef2ff", borderRadius: 8,
+            padding: "6px 12px", textDecoration: "none", whiteSpace: "nowrap" }}>
+  Evaluation dashboard
+</a>
+
             Employee{" "}
             <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}
-              style={{ borderRadius: 9, border: "2px solid #94a3b8", padding: "6px 9px",
-                       fontSize: 13, fontWeight: 600, background: "#fff" }}>
-              {EMPLOYEES.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}
+              style={S.control}>
+              {employees.length === 0 && (
+                <option value={employeeId}>{employeeId} — loading…</option>
+              )}
+              {employees.map((e) => (
+                <option key={e.employee_id} value={e.employee_id}>
+                  {e.employee_id} — {e.display_name}
+                  {e.employment_type !== "FT" ? ` · ${e.employment_type}` : ""}
+                  {e.remote_eligible ? "" : " · not remote-eligible"}
+                </option>
+              ))}
             </select>
+            {employeeError && (
+              <span style={{ color: "#b91c1c", marginLeft: 8, fontSize: 12 }}>
+                employee list unavailable
+              </span>
+            )}
           </label>
         </div>
       </header>
@@ -448,6 +533,25 @@ export default function App() {
             padding: "72px 24px", fontWeight: 500, lineHeight: 1.7,
           }}>
             Ask a question, or use a demo button above.
+            <br />
+            Pick a thread to reopen what was already asked.
+          </div>
+        )}
+          {turns.length > 0 && (
+          <div style={{
+            display: "flex", alignItems: "baseline", gap: 10,
+            marginBottom: 18, paddingBottom: 12,
+            borderBottom: "2px solid #cbd5e1",
+          }}>
+            <span style={{ fontSize: 16, fontWeight: 800, color: "#334155" }}>
+              Conversation
+            </span>
+            <span style={{ ...S.mono, fontSize: 12, color: "#64748b" }}>
+              {threadId} · {turns.length} turn{turns.length === 1 ? "" : "s"}
+              {turns[turns.length - 1].prompt_id
+                ? ` · prompt ${turns[turns.length - 1].prompt_id}`
+                : ""}
+            </span>
           </div>
         )}
         {turns.map((turn, i) => (

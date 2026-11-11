@@ -5,6 +5,10 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 
 import { quanticConfig } from '../config';
+import { Duration } from 'aws-cdk-lib';
+
+
+
 
 export interface DatabaseConstructProps {
   vpc: ec2.IVpc;
@@ -33,8 +37,12 @@ export class DatabaseConstruct extends Construct {
       }),
       iamAuthentication: true,
       writer: rds.ClusterInstance.serverlessV2('writer'),
-      serverlessV2MinCapacity: 0.5,
+      serverlessV2MinCapacity: 0,
       serverlessV2MaxCapacity: 2,
+      // 15 minutes idle before auto-pause. The default is 5 minutes, which
+      // produces a cold start on nearly every pause in a working session.
+      // Auto-pause only applies when the minimum capacity is 0.
+      serverlessV2AutoPauseDuration: Duration.minutes(15),
       vpc: props.vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
