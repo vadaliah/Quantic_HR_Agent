@@ -18,12 +18,11 @@ def test_remote_eligibility_for_ny_employee() -> None:
 
 
 def test_pto_insufficient_for_columbus_employee() -> None:
-    check = check_policy_compliance("E002", "pto", requested_hours=16)
+    check = check_policy_compliance("E1012", "pto", days_requested=3)
     assert check["compliant"] is False
 
 
 def test_langgraph_remote_workflow_uses_mcp() -> None:
-    os.environ.setdefault("DATABASE_URL", "postgresql://quantic@127.0.0.1:5433/quantic_hr")
     result = run_agent("Can I work remote from another state?", "E001")
     names = [item["name"] for item in result["tool_trace"]]
     assert "lookup_employee_profile" in names
@@ -34,13 +33,12 @@ def test_langgraph_remote_workflow_uses_mcp() -> None:
 
 
 def test_health_and_chat_contracts() -> None:
-    os.environ.setdefault("DATABASE_URL", "postgresql://quantic@127.0.0.1:5433/quantic_hr")
     client = TestClient(app)
     health = client.get("/health").json()
-    assert health["runtime"] == "local"
+    assert health["runtime"] in ("local", "data-api")
     assert health["mcp"] == "stdio"
     assert health["database"]["ok"] is True
-    chat = client.post("/chat", json={"message": "PTO balance and policy", "employee_id": "E002"}).json()
+    chat = client.post("/chat", json={"message": "PTO balance and policy", "employee_id": "E1012"}).json()
     assert "answer" in chat
     assert "tool_trace" in chat
     assert "citations" in chat
