@@ -36,8 +36,8 @@ from quantic_hr.guardrails import needs_clarification, is_out_of_corpus, REFUSAL
 
 MAX_TURNS = 6          # retained per thread, for display
 CONTEXT_TURNS = 2      # passed to the planner, for follow-ups
-WARMUP_ATTEMPTS = 3
-WARMUP_DELAY = 5
+WARMUP_ATTEMPTS = 6
+WARMUP_DELAY = 10
 
 
 app = FastAPI(title="Quantic HR BFF", version="0.7.0")

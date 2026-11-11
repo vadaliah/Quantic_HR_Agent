@@ -114,7 +114,7 @@ def connection() -> Iterator[Any]:
     import psycopg
     from psycopg.rows import dict_row
 
-    conn = psycopg.connect(database_url(), row_factory=dict_row, connect_timeout=15)
+    conn = psycopg.connect(database_url(), row_factory=dict_row, connect_timeout=60)
     try:
         yield conn
         conn.commit()
