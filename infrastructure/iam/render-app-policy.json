@@ -1,0 +1,37 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ChatNovaProViaUsInferenceProfile",
+      "Effect": "Allow",
+      "Action": "bedrock:InvokeModel",
+      "Resource": [
+        "arn:aws:bedrock:us-east-2:287238357427:inference-profile/us.amazon.nova-pro-v1:0",
+        "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-pro-v1:0",
+        "arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-pro-v1:0",
+        "arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-pro-v1:0"
+      ]
+    },
+    {
+      "Sid": "EmbeddingsTitanV2InRegion",
+      "Effect": "Allow",
+      "Action": "bedrock:InvokeModel",
+      "Resource": "arn:aws:bedrock:us-east-2::foundation-model/amazon.titan-embed-text-v2:0"
+    },
+    {
+      "Sid": "AuroraDataApiExistingCluster",
+      "Effect": "Allow",
+      "Action": [
+        "rds-data:ExecuteStatement",
+        "rds-data:BatchExecuteStatement"
+      ],
+      "Resource": "arn:aws:rds:us-east-2:287238357427:cluster:quantichragentstack-databaseaurorapostgres6560ef93-h8yvdkzw8voy"
+    },
+    {
+      "Sid": "DataApiDatabaseSecret",
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetSecretValue",
+      "Resource": "arn:aws:secretsmanager:us-east-2:287238357427:secret:quantic-hr-agent/dev/database/admin-e4lGu2"
+    }
+  ]
+}
