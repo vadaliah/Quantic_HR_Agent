@@ -21,6 +21,9 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --group dev
+        
+      - name: Tests
+        run: uv run pytest -q
 
       - name: Import check
         run: |
