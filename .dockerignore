@@ -1,0 +1,10 @@
+# Allowlist: the image needs only the Python project. Keeps infrastructure/
+# (node_modules, cdk.out), frontend/, corpus, .env files and git out of the
+# build context and out of the CDK asset hash.
+*
+!Dockerfile
+!pyproject.toml
+!uv.lock
+!src
+**/__pycache__
+**/*.pyc

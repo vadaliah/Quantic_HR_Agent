@@ -1,10 +1,15 @@
-"""FastAPI BFF. Calls the LangGraph agent (Bedrock Converse or keyword fallback); not AgentCore."""
+"""FastAPI app: the BFF (/chat, /health) and the AgentCore Runtime HTTP contract.
+
+AgentCore Runtime (HTTP protocol) calls POST /invocations and GET /ping on port
+8080; both are thin adapters over the same LangGraph agent as /chat.
+"""
 
 from __future__ import annotations
 
 import os
+from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -38,7 +43,7 @@ def health() -> dict:
         db_error = str(exc)
     return {
         "status": "ok" if db_ok else "degraded",
-        "runtime": "local",
+        "runtime": os.environ.get("QUANTIC_RUNTIME", "local"),
         "mcp": "stdio",
         "agent_mode": agent_mode(),
         "chat_model": bedrock.chat_model_id(),
@@ -51,3 +56,29 @@ def health() -> dict:
 @app.post("/chat")
 def chat(request: ChatRequest) -> dict:
     return run_agent(request.message, request.employee_id)
+
+
+class InvocationRequest(BaseModel):
+    """AgentCore payload. ``prompt`` per the HTTP contract; ``message`` also accepted."""
+
+    prompt: str | None = None
+    message: str | None = None
+    employee_id: str = Field(default=DEFAULT_EMPLOYEE_ID)
+
+
+@app.get("/ping")
+def ping() -> dict:
+    """AgentCore health check. Cheap: no database or Bedrock call."""
+    return {"status": "Healthy"}
+
+
+@app.post("/invocations")
+def invocations(
+    request: InvocationRequest,
+    session_id: str | None = Header(default=None, alias="X-Amzn-Bedrock-AgentCore-Runtime-Session-Id"),
+) -> dict[str, Any]:
+    text = (request.prompt or request.message or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="prompt is required")
+    result = run_agent(text, request.employee_id)
+    return {"response": result["answer"], "status": "success", "session_id": session_id, **result}
