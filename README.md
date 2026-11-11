@@ -4,15 +4,18 @@ Agentic RAG + MCP project for Quantic AI Engineering Techniques and Architecture
 
 ## Where the data lives
 
-There is **no local database**. All tables, seed data and vector search live in the deployed
-Aurora Serverless v2 PostgreSQL cluster, reached through the RDS Data API for DDL/DML and a
-private connection for the application. Local Postgres scripts, the local schema/seed files and
-`docker-compose.yml` were removed so there is one source of truth.
+**Deployment = Render + the existing Aurora database.** The app runs as one Render free web
+service (`render.yaml`, `Dockerfile.render`) and reads Hiren's existing Aurora Serverless v2
+PostgreSQL cluster (`QuanticHrAgentStack`, database `quantic_hr_agent`) through the RDS Data
+API (`DB_MODE=data_api`, read-only). Bedrock provides chat and embeddings. See
+[docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md). Local development and tests use a local
+Postgres with the same migrations (`DB_MODE=psycopg`, the default).
 
 | Piece | Where it runs |
 | --- | --- |
-| React UI (Vite) | Local (port 5173) or a static host |
-| FastAPI BFF + LangGraph + MCP | Local process or a deployed service |
+| React UI (Vite) | Local (port 5173), or built into the Render service and served at `/` |
+| FastAPI BFF + LangGraph + MCP | Local process, or the Render free web service (`$PORT`) |
+| Database access | `DB_MODE=psycopg` locally, `DB_MODE=data_api` (Aurora Data API) on Render |
 | Postgres + pgvector | Aurora Serverless v2, `us-east-2`, database `quantic_hr_agent` |
 | Embeddings + chat | Amazon Bedrock: Titan Text Embeddings v2 (1024 dims) and one chat model, default Amazon Nova Pro (`us.amazon.nova-pro-v1:0`) |
 
@@ -141,47 +144,40 @@ E1019 and E1001.
    (POL-001 2.1), three days or more needs manager approval (POL-001 3.1), and five business
    days' notice applies. `E1019` is the insufficient-balance path.
 
-## AWS CDK (synth only)
+## AWS CDK (record of the existing database stack only)
 
 ```bash
 cd infrastructure
 npm ci && npm test && npm run synth && npm run synth:reuse
 ```
 
-Do not run `scripts/deploy-sandbox.sh`. Café Fausse and AEA stay untouched.
+**Do not run `cdk deploy` from this branch.** `QuanticHrAgentStack` is already deployed in
+account `287238357427`, `us-east-2` (created 2026-11-03; Aurora database `quantic_hr_agent`
+holds live data, deletion protection on, pre-update snapshot
+`quantic-hr-agent-pre-update-20261111-2326`). The read-only `cdk diff` of 2026-11-11
+([docs/evidence/cdk-diff-2026-11-11.txt](docs/evidence/cdk-diff-2026-11-11.txt)) shows this
+code would replace the DB subnets and security group. The CDK app is kept only as a record of
+the database stack. The AgentCore pieces (`Dockerfile`, `/invocations`, the
+`AgentContainerRuntime` construct) are not used. Do not run `scripts/deploy-sandbox.sh`.
+Café Fausse and AEA stay untouched.
 
 ## Deployment and teardown
 
-**`QuanticHrAgentStack` is already deployed** in account `287238357427`, `us-east-2`
-(created 2026-11-03; Aurora database `quantic_hr_agent` holds live data). Never run a deploy,
-migration or ingest against it without the owner's go, and run a read-only `cdk diff` first:
-any replace or destroy on the cluster, its instance, subnet group, security group or secret
-must be fixed in code before deploying. The stack contains a VPC with one NAT gateway, Aurora Serverless v2 with pgvector,
-the runtime role and AgentCore.
+Hosting is Render; follow [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md).
 
-- **Sponsor approval first.** No deploy without the sponsor's explicit go.
-- **Time-limited exposure.** Agree the deploy and teardown dates before deploying. The stack
-  costs roughly $75 a month while it is up (Aurora 0.5 ACU floor plus the NAT gateway), before
-  Bedrock usage, so keep the window to the grading period.
-- **Model access.** Confirm Nova Pro (the default) is enabled in account `287238357427` before
-  deploying; it is not yet confirmed. To use Claude instead, deploy with
-  `-c quanticChatModel=claude-sonnet-4-6` and set `BEDROCK_CHAT_INFERENCE_PROFILE` to match.
-- **Agent image.** `cdk deploy` builds the repository `Dockerfile` for linux/arm64 (Docker with
-  buildx/arm64 support required on the deploying machine) and pushes it to the CDK bootstrap
-  repository `cdk-hnb659fds-container-assets-287238357427-us-east-2`, tagged with the asset hash.
-  AgentCore Runtime then runs it (`/ping`, `/invocations` on port 8080). To build only:
-  `docker buildx build --platform linux/arm64 -t quantic-hr-agent .`
-  `-c quanticRuntimeImage=hello-world` deploys the Hello World runtime instead.
-- **Teardown.** `cd infrastructure && npx cdk destroy QuanticHrAgentStack`. Aurora deletion
-  protection is on by default (`quanticDeletionProtection=true`), so the cluster and its admin
-  secret are retained and the data survives; deleting them is a separate, explicit decision. The runtime log group
-  `/quantic-hr-agent/dev/runtime` is retained by design and the admin secret enters Secrets
-  Manager's recovery window; remove or wait them out after grading. **ECR images in the
-  bootstrap repository are not removed by `cdk destroy`**: delete the agent image tags from
-  `cdk-hnb659fds-container-assets-287238357427-us-east-2` (or run `cdk gc` if enabled) to stop
-  the small storage charge.
+- **AWS side:** an IAM user with `infrastructure/iam/render-app-policy.json` (Bedrock
+  `InvokeModel` on Nova Pro and Titan v2, Data API on the one cluster, `GetSecretValue` on the
+  one secret) and an AWS Budget alert of about $10. Humans create both; nothing else changes
+  in AWS.
+- **Cost:** Render free tier; Aurora stays at 0 ACU when idle (auto-pause after 300 s);
+  Bedrock is pay per request.
+- **Model access.** Confirm Nova Pro (the default) is enabled in account `287238357427` with a
+  first call; `CHAT_MODEL=us.anthropic.claude-sonnet-4-6` is the alternative.
+- **Teardown after grading:** delete the IAM access key (or user) and suspend or delete the
+  Render service. The Aurora cluster is Hiren's and stays as is.
 
 ## Docs
+- [Deploy on Render](docs/DEPLOY_RENDER.md)
 - [Cost-first strategy](docs/COST_FIRST_DELIVERY_STRATEGY.md)
 - [Master plan](docs/MASTER_PLAN.md)
 - [design-and-evaluation.md](design-and-evaluation.md)

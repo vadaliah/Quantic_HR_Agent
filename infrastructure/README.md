@@ -1,5 +1,12 @@
 # Quantic infrastructure
 
+> **Record only. Do not run `cdk deploy` from this branch.** Hosting is Render plus the
+> existing `QuanticHrAgentStack` Aurora database ([../docs/DEPLOY_RENDER.md](../docs/DEPLOY_RENDER.md)).
+> The read-only diff in [../docs/evidence/cdk-diff-2026-11-11.txt](../docs/evidence/cdk-diff-2026-11-11.txt)
+> shows this code would replace the live DB subnets and security group. The AgentCore runtime
+> construct is kept but not used. The Render app's IAM policy is
+> [iam/render-app-policy.json](iam/render-app-policy.json).
+
 Independent CDK app for `QuanticHrAgentStack`. It does not import or modify `CafeFausseApplicationStack` or `AeaSandboxStack`. Step 1B adds a stdlib AgentCore Hello World runtime on the same VPC. It does not implement RAG, MCP tools, or HR workflows.
 
 Local checks do not call AWS:

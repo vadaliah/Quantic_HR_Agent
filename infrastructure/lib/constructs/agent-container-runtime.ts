@@ -1,3 +1,4 @@
+// NOT USED: hosting is Render (docs/DEPLOY_RENDER.md). Kept as a record of the AgentCore path.
 import * as path from 'path';
 import * as agentcore from 'aws-cdk-lib/aws-bedrockagentcore';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

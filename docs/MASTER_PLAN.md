@@ -5,7 +5,7 @@
 **Governing delivery path:** [COST_FIRST_DELIVERY_STRATEGY.md](COST_FIRST_DELIVERY_STRATEGY.md). Do not provision billable AWS resources. Implement the same architecture locally first.
 
 ## Core architecture
-Vite React UI + FastAPI BFF (/chat, /health) → AWS Bedrock AgentCore (LangGraph orchestrator) → real MCP client/server tools → Aurora Serverless v2 PostgreSQL + pgvector (policy RAG and synthetic HR records). Bedrock for chat and embeddings. Render was dropped on 2026-11-11; UI/BFF hosting stays within the AWS CDK design.
+Vite React UI + FastAPI BFF (/chat, /health) + LangGraph orchestrator + real MCP client/server tools, hosted as one Render free web service → Aurora Data API → the existing Aurora Serverless v2 PostgreSQL + pgvector (policy RAG and synthetic HR records). Bedrock for chat and embeddings. Decision 2026-11-11 23:30 CET: Render hosting; AWS keeps only the existing database stack and Bedrock; no `cdk deploy` from this branch; AgentCore not used (docs/DEPLOY_RENDER.md).
 
 Reuse the AWS CDK TypeScript infrastructure patterns in [Café Fausse](https://github.com/vadaliah/Quantic_Cafe_Fausse_Application); provision an **independent Quantic stack**. Never share Café Fausse application records, secrets, or operational database resources.
 

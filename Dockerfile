@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1
+# NOT USED: hosting is Render (Dockerfile.render, docs/DEPLOY_RENDER.md). This
+# AgentCore image is kept as a record of that path.
 # Quantic HR agent for Amazon Bedrock AgentCore Runtime (HTTP protocol contract):
 # linux/arm64, listens on 0.0.0.0:8080, POST /invocations, GET /ping.
 # Build: docker buildx build --platform linux/arm64 -t quantic-hr-agent .
