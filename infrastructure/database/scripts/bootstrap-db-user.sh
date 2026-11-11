@@ -5,7 +5,7 @@ set -euo pipefail
 AWS_PROFILE="${AWS_PROFILE:-AEA-Sandbox-PowerUser}"
 AWS_REGION="${AWS_REGION:-us-east-2}"
 STACK_NAME="${STACK_NAME:-QuanticHrAgentStack}"
-DB_NAME="${DB_NAME:-quantic_hr}"
+DB_NAME="${DB_NAME:-quantic_hr_agent}"
 DB_ADMIN_USER="${DB_ADMIN_USER:-quantic_hr_admin}"
 DB_RUNTIME_USER="${DB_RUNTIME_USER:-quantic_hr_agent}"
 DB_PORT="${DB_PORT:-5432}"

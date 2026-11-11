@@ -59,7 +59,7 @@ echo "  stack   : $QUANTIC_STACK_NAME"
 echo "  account : $ACCOUNT"
 echo "  region  : $AWS_REGION"
 echo "  database mode: ${QUANTIC_DATABASE_MODE:-create}"
-echo "  database: quantic_hr (create) or existing Café cluster (reuse-cafe-fausse)"
+echo "  database: quantic_hr_agent (create) or existing Café cluster (reuse-cafe-fausse)"
 echo "  secret  : quantic-hr-agent/dev/database/admin (create mode only)"
 echo "  profile : $AWS_PROFILE"
 echo

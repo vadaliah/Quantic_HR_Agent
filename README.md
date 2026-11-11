@@ -56,6 +56,9 @@ Claude Sonnet 4.5 is marked Legacy in Bedrock and is no longer configured.
 
 ## Database setup
 
+The database is named `quantic_hr_agent` everywhere: the CDK cluster default database,
+the Data API migration runner, migration 003's grant, the scripts and `.env.example`.
+
 Migrations and seeds run through the guarded RDS Data API runner. It opens its own
 transaction, uses the admin secret, verifies the account, region and cluster before doing
 anything, and prompts for a typed confirmation.

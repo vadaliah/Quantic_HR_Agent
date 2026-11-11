@@ -63,11 +63,11 @@ describe('QuanticHrAgentStack isolation', () => {
 describe('Aurora encryption and database ingress', () => {
   const template = synthesize();
 
-  test('encrypts the new quantic_hr cluster and enables IAM auth', () => {
+  test('encrypts the new quantic_hr_agent cluster and enables IAM auth', () => {
     template.hasResourceProperties('AWS::RDS::DBCluster', {
       StorageEncrypted: true,
       EnableIAMDatabaseAuthentication: true,
-      DatabaseName: 'quantic_hr',
+      DatabaseName: 'quantic_hr_agent',
       Engine: 'aurora-postgresql',
       EngineVersion: '17.4',
       DeletionProtection: false,

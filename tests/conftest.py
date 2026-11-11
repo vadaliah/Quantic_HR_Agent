@@ -11,7 +11,7 @@ import os
 
 import pytest
 
-DEFAULT_TEST_DATABASE_URL = "postgresql://quantic@127.0.0.1:5433/quantic_hr"
+DEFAULT_TEST_DATABASE_URL = "postgresql://quantic@127.0.0.1:5433/quantic_hr_agent"
 
 
 def _database_reachable(url: str) -> str | None:

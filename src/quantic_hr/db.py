@@ -11,7 +11,7 @@ from psycopg.rows import dict_row
 def database_url() -> str:
     return os.environ.get(
         "DATABASE_URL",
-        "postgresql://quantic:quantic@127.0.0.1:5433/quantic_hr",
+        "postgresql://quantic:quantic@127.0.0.1:5433/quantic_hr_agent",
     )
 
 

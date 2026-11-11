@@ -44,7 +44,7 @@ Run from repo root. Requires Node 22+, npm, Python 3.12 and uv. For API tests, s
 
 ```bash
 ./scripts/local-db.sh start
-export DATABASE_URL=postgresql://quantic@127.0.0.1:5433/quantic_hr
+export DATABASE_URL=postgresql://quantic@127.0.0.1:5433/quantic_hr_agent
 bash scripts/validate-baseline.sh
 bash scripts/start-local-app.sh
 # second terminal

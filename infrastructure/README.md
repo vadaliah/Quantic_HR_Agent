@@ -25,7 +25,7 @@ That mode omits new RDS/secret/admin-host resources and does not add security-gr
 ## What synth creates
 
 - New VPC `10.20.0.0/16`, one NAT gateway, private subnets for the future AgentCore ENIs, and isolated subnets for Aurora.
-- Aurora PostgreSQL 17.4 Serverless v2 (0.5–2 ACU), encrypted, IAM auth, database `quantic_hr`, secret `quantic-hr-agent/dev/database/admin`.
+- Aurora PostgreSQL 17.4 Serverless v2 (0.5–2 ACU), encrypted, IAM auth, database `quantic_hr_agent`, secret `quantic-hr-agent/dev/database/admin`.
 - SSM admin host (`t4g.nano`) in a private subnet. Its AMI is an SSM parameter resolved at deploy time.
 - Runtime role `quantic-hr-agent-dev-runtime`, scoped to one chat model (`-c quanticChatModel`, default `nova-pro`, alternative `claude-sonnet-4-6`) through its `us.` inference profile and foundation model in us-east-1/us-east-2/us-west-2, Titan Text Embeddings v2 in us-east-2, `rds-db:connect` as `quantic_hr_agent`, and one log group.
 - AgentCore runtime `QuanticHelloWorld` (`networkMode=VPC`, HTTP `/ping` and `/invocations`). Direct code deploy of `runtime/hello_world`. No model or database call.

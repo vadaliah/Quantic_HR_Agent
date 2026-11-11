@@ -9,7 +9,8 @@ export const quanticConfig = {
   account: '287238357427',
   region: 'us-east-2',
   awsProfile: 'AEA-Sandbox-PowerUser',
-  databaseName: 'quantic_hr',
+  /** Matches the Data API migration runner, migration 003 and the README. */
+  databaseName: 'quantic_hr_agent',
   adminUsername: 'quantic_hr_admin',
   runtimeDbUsername: 'quantic_hr_agent',
   secretName: 'quantic-hr-agent/dev/database/admin',
