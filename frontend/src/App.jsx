@@ -377,7 +377,7 @@ export default function App() {
       .catch(() => setThreads([]));
   }, [turns.length]);
 
-    async function ask(question, employee, forcedThread = null) {
+  async function ask(question, employee, forcedThread = null) {
     if (!question.trim() || busy) return;
     setError("");
     setBusy(true);
@@ -396,10 +396,11 @@ export default function App() {
         return;
       }
       const turn = await response.json();
+      // Newest first. A new thread replaces the view rather than appending —
+      // otherwise two employees' questions interleave under one header.
       const sameThread = turn.thread_id === threadId;
       setThreadId(turn.thread_id);
       setTurns((prev) => {
-        // Newest first. A new thread replaces the view rather than appending.
         const next = sameThread ? [turn, ...prev] : [turn];
         const clipped = next.slice(0, 6);
         setOpenTurn(0);
@@ -412,28 +413,9 @@ export default function App() {
     }
   }
 
-
-
-  async function loadThread(idToLoad) {
-    if (busy || !idToLoad) return;
-    setError("");
-    try {
-      const detail = await fetch(`${API}/thread/${idToLoad}`).then((r) => r.json());
-      const stored = detail.turns || [];
-      setTurns(stored.slice(-6).reverse());
-      setOpenTurn(stored.length ? 0 : null);
-      setThreadId(idToLoad);
-      const last = stored[stored.length - 1];
-      if (last) {
-        setMessage(last.question || "");
-        if (last.employee_id) setEmployeeId(last.employee_id);
-      }
-    } catch (err) {
-      setError(String(err));
-    }
-      // Reopen a session thread: clear the view, render its stored turns newest
-  // first, and point the composer at the last question. Nothing is executed —
-  // the user decides whether to re-run it.
+  // Reopen a session thread: render its stored turns newest first, and point the
+  // composer at the last question. Nothing is executed — the user decides
+  // whether to re-run it.
   async function loadThread(idToLoad) {
     if (busy || !idToLoad) return;
     setError("");
@@ -453,21 +435,18 @@ export default function App() {
     }
   }
 
-
-  function switchEmployee(next) {
-    setEmployeeId(next);
-    if (turns.length) {
-      setTurns([]);
-      setThreadId(null);
-      setOpenTurn(null);
-    }
-  }
-
-
-  function newThread() {
+  // A thread belongs to one employee: the server records whose data was read for
+  // every turn. Changing employee therefore starts a fresh conversation rather
+  // than mixing two people's answers under one header.
+  function startNewThread() {
     setTurns([]);
     setThreadId(null);
     setOpenTurn(null);
+  }
+
+  function switchEmployee(next) {
+    setEmployeeId(next);
+    if (turns.length) startNewThread();
   }
 
   const mixedEmployees = new Set(turns.map((t) => t.employee_id)).size > 1;
@@ -493,14 +472,17 @@ export default function App() {
           {DEMOS.map((demo) => (
             <button
               key={demo.label}
-              onClick={() => { setEmployeeId(demo.employee); setMessage(demo.message); }}
+              onClick={() => {
+                switchEmployee(demo.employee);
+                setMessage(demo.message);
+              }}
               style={{ ...S.control, cursor: "pointer" }}
             >
               {demo.label}
             </button>
           ))}
 
-          <button onClick={newThread} style={{ ...S.control, cursor: "pointer" }}>
+          <button onClick={startNewThread} style={{ ...S.control, cursor: "pointer" }}>
             New thread
           </button>
 
@@ -563,7 +545,7 @@ export default function App() {
         <span style={{ ...S.label, color: "#64748b" }}>Conversation</span>
         <span style={{ ...S.mono, textTransform: "none", letterSpacing: 0 }}>
           {threadId || "new thread"} · {turns.length} turn{turns.length === 1 ? "" : "s"}
-          {turns.length ? ` · prompt ${turns[turns.length - 1].prompt_id}` : ""}
+          {turns.length ? ` · prompt ${turns[0].prompt_id}` : ""}
         </span>
         {mixedEmployees && (
           <span style={{ color: "#b45309", fontWeight: 800, fontSize: 11 }}>
