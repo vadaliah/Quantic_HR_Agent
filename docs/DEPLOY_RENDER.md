@@ -13,9 +13,9 @@ Browser → Render web service (React UI + FastAPI /chat, LangGraph tool loop, s
                                            credentials from the Secrets Manager secret
 ```
 
-## Current state (2026-11-12, ~00:10 CET)
+## Current state (2026-11-12, ~00:58 CET)
 
-**Not live yet.** There is no Render service and no URL.
+**Live:** https://quantic-hr-agent-dcw4.onrender.com/
 
 | Item | State |
 | --- | --- |
@@ -27,8 +27,15 @@ Browser → Render web service (React UI + FastAPI /chat, LangGraph tool loop, s
 | Data API first call returned `DatabaseResumingException` (auto-pause wake), then succeeded; the app retries for up to 60 s | ✅ Observed |
 | Read-only Data API check of the live database (SELECT only, counts only; see below) | ✅ Done |
 | AWS Budget alert (~US$10) | ⏳ Pending (alert email to be provided) |
-| Render Blueprint created, key pasted, deployed | ⏳ Pending |
-| Live URL in `deployed.md`, `/health` shows `database.ok: true`, two demo tasks checked | ⏳ Pending |
+| Render Blueprint created, key pasted, deployed | ✅ Done (https://quantic-hr-agent-dcw4.onrender.com/) |
+| Live URL in `deployed.md`, `/health` shows `database.ok: true`, two demo tasks checked | ✅ Done (smoke 2026-11-12 ~00:58 CET; see below) |
+
+**Live smoke (verified 2026-11-12 ~00:58 CET, Europe/Berlin), read-only:**
+
+- `/ping` 200 `{"status":"Healthy"}`.
+- `/health` 200: `runtime=render`, `database.ok` true, `mode=data_api`, `chat_model=us.amazon.nova-pro-v1:0`, `embedding_model=amazon.titan-embed-text-v2:0`.
+- `POST /chat` for E1007 "How many PTO days do I have left?" returned "10.9 PTO days left as of 2026-11-11 [POL-001 2.1]" via `check_pto_balance` in about 11 s.
+- The remote-work question answered `mode=bedrock` with POL-003 citations in about 14 s.
 
 **Live database, read-only check (2026-11-12 ~00:15 CET, as `quantic-hr-render`, SELECT only):**
 
@@ -133,4 +140,5 @@ Optional Sonnet 4.6 alternative (add only if `CHAT_MODEL` switches):
 - ~~Live schema and data match the tools~~ — verified read-only on 2026-11-12 (see Current state).
 - ~~Embeddings present~~ — 173/173 chunks embedded (1024-d); no ingest needed.
 - ~~Nova Pro model access~~ — confirmed by a Converse smoke call on 2026-11-12.
-- Still open: the end-to-end `/chat` answers and citations on the live Render URL, and measured cold-start times.
+- ~~End-to-end `/chat` answers and citations on the live Render URL~~ — verified 2026-11-12 ~00:58 CET (see Current state).
+- Still open: measured cold-start times.

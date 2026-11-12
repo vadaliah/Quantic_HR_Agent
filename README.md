@@ -165,10 +165,12 @@ Café Fausse and AEA stay untouched.
 
 Hosting is Render; follow [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md).
 
-**Status (2026-11-12 ~00:10 CET): not live yet.** The IAM user `quantic-hr-render` with the
-least-privilege policy and its access key exist. The smoke tests passed: Nova Pro Converse, Titan v2,
-and Data API reads (the live DB has 25 employees and 173/173 embedded chunks). Still to do: the AWS
-Budget alert, the Render Blueprint, and a live URL. Do not run `cdk deploy`.
+**Status (2026-11-12 ~00:58 CET, Europe/Berlin): live at https://quantic-hr-agent-dcw4.onrender.com/.** The IAM user `quantic-hr-render` with the
+least-privilege policy and its access key exist. Live smoke (same time): `/ping` 200 `{"status":"Healthy"}`;
+`/health` 200, `runtime=render`, `database.ok` true, `mode=data_api`, Nova Pro and Titan v2; `POST /chat`
+for E1007 "How many PTO days do I have left?" returned "10.9 PTO days left as of 2026-11-11 [POL-001 2.1]" via
+`check_pto_balance` in about 11 s; the remote-work question answered `mode=bedrock` with POL-003
+citations in about 14 s. Still to do: the AWS Budget alert. Do not run `cdk deploy`.
 
 - **AWS side:** an IAM user with `infrastructure/iam/render-app-policy.json` (Bedrock
   `InvokeModel` on Nova Pro and Titan v2, Data API on the one cluster, `GetSecretValue` on the

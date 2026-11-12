@@ -27,7 +27,7 @@ export default function App() {
   return (
     <main style={{ fontFamily: "sans-serif", maxWidth: 720, margin: "2rem auto" }}>
       <h1>Quantic HR Agent</h1>
-      <p>Local MCP + LangGraph. No AWS resources are used.</p>
+      <p>MCP + LangGraph agent. Policy search on Aurora pgvector, answers from Amazon Bedrock (Nova Pro).</p>
       <form onSubmit={onSubmit}>
         <label>
           Employee
