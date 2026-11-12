@@ -207,6 +207,46 @@ def get_policy_section(document_id: str, section_id: str) -> dict[str, Any]:
     return {"found": True, **row}
 
 
+# ------------------------------------------------------------- policy limits
+def _limit_from_corpus(document_id: str, section_id: str) -> float | None:
+    """Read a dollar limit out of the policy text rather than asserting it.
+
+    Hardcoding the home office stipend would silently disagree with POL-005 the
+    moment the corpus is edited, and nothing would catch it. Reading the figure
+    keeps one source of truth: the citation the answer gives is the same text
+    the comparison came from.
+
+    Returns None when no figure can be read, so the caller reports that rather
+    than inventing a threshold.
+    """
+    section = get_policy_section(document_id, section_id)
+    if not section.get("found"):
+        return None
+    text = str(section.get("content") or "")
+    # POL-005 2.1 words the rule as a "one-time ... stipend of $500". Anchoring
+    # on the phrase avoids picking up an unrelated figure elsewhere in the
+    # section, which a bare "$" match would.
+    match = re.search(r"one-time[^$]{0,60}\$\s?([\d,]+(?:\.\d{2})?)", text, re.I)
+    if not match:
+        match = re.search(r"\$\s?([\d,]+(?:\.\d{2})?)", text)
+    if not match:
+        return None
+    try:
+        return float(match.group(1).replace(",", ""))
+    except ValueError:
+        return None
+
+
+# The model names an expense check in several ways, and an unrecognised name
+# used to produce "unsupported check_type", which left the comparison to be
+# reasoned from prose. Amount questions now get the deterministic branch
+# whatever label arrives.
+EXPENSE_CHECK_TYPES = {
+    "expense", "expenses", "reimbursement", "reimbursable", "office_furniture",
+    "furniture", "equipment", "home_office", "stipend", "purchase",
+}
+
+
 def check_policy_compliance(
     employee_id: str,
     check_type: str,
@@ -218,42 +258,6 @@ def check_policy_compliance(
     profile = lookup_employee_profile(employee_id)
     if not profile.get("found"):
         return {"compliant": False, "reason": "unknown employee", "employee_id": employee_id}
-    if check_type in {"expense", "office_furniture", "equipment"}:
-        # Deterministic amount comparison. The model must not read a threshold
-        # out of prose: a section titled "What is not reimbursed" describes
-        # exclusions, and applying it to a figure below the limit inverts the
-        # rule. The stipend is enforced here instead.
-        stipend = 500.0
-        amount = float(amount or 0)
-        if amount <= stipend:
-            return {
-                "compliant": True,
-                "check_type": check_type,
-                "employee_id": employee_id,
-                "amount": amount,
-                "stipend": stipend,
-                "route": "CLAIM_WITH_RECEIPT",
-                "reason": (
-                    f"${amount:.0f} is within the ${stipend:.0f} one-time home office "
-                    "stipend. Submit the receipt within 30 days."
-                ),
-                "policy_document_id": "POL-005",
-                "policy_section_id": "2.1",
-            }
-        return {
-            "compliant": False,
-            "check_type": check_type,
-            "employee_id": employee_id,
-            "amount": amount,
-            "stipend": stipend,
-            "route": "NEEDS_PRE_APPROVAL",
-            "reason": (
-                f"${amount:.0f} exceeds the ${stipend:.0f} one-time home office "
-                "stipend, so it needs manager pre-approval."
-            ),
-            "policy_document_id": "POL-005",
-            "policy_section_id": "2.1",
-        }
 
     if check_type == "remote_work":
         eligible = bool(profile["remote_eligible"]) and not profile.get("designated_onsite_role")
@@ -304,6 +308,55 @@ def check_policy_compliance(
             "reason": "sufficient PTO balance" if compliant else "insufficient PTO balance",
             "policy_document_id": "POL-001",
             "policy_section_id": "2.1" if compliant else "3.1",
+        }
+
+    if check_type in EXPENSE_CHECK_TYPES:
+        # The comparison is made here, not by the model reading prose. A section
+        # titled "What is not reimbursed" describes exclusions; applying it to a
+        # figure UNDER the limit inverts the rule, which is how a $400 chair was
+        # once answered as not reimbursable.
+        amount = float(amount or 0)
+        stipend = _limit_from_corpus("POL-005", "2.1")
+        if stipend is None:
+            # No number invented. If the corpus does not state the limit, the
+            # honest answer is that the comparison cannot be made.
+            return {
+                "compliant": False,
+                "check_type": check_type,
+                "employee_id": employee_id,
+                "amount": amount,
+                "reason": "could not read the home office stipend from POL-005 2.1",
+                "policy_document_id": "POL-005",
+                "policy_section_id": "2.1",
+            }
+        if amount <= stipend:
+            return {
+                "compliant": True,
+                "check_type": check_type,
+                "employee_id": employee_id,
+                "amount": amount,
+                "stipend": stipend,
+                "route": "CLAIM_WITH_RECEIPT",
+                "reason": (
+                    f"${amount:.0f} is within the ${stipend:.0f} one-time home office "
+                    "stipend, so it is reimbursable. Submit the receipt within 30 days."
+                ),
+                "policy_document_id": "POL-005",
+                "policy_section_id": "2.1",
+            }
+        return {
+            "compliant": False,
+            "check_type": check_type,
+            "employee_id": employee_id,
+            "amount": amount,
+            "stipend": stipend,
+            "route": "NEEDS_PRE_APPROVAL",
+            "reason": (
+                f"${amount:.0f} exceeds the ${stipend:.0f} one-time home office "
+                "stipend, so it needs manager pre-approval."
+            ),
+            "policy_document_id": "POL-005",
+            "policy_section_id": "2.1",
         }
 
     return {"compliant": False, "reason": f"unsupported check_type {check_type}"}
