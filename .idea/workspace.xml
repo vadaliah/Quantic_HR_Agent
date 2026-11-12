@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="c3b3ad5a-711c-45e8-b3f6-6dba1ef95cd6" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/evaluation/eval_set.jsonl" beforeDir="false" afterPath="$PROJECT_DIR$/evaluation/eval_set.jsonl" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/evaluation/results/results.jsonl" beforeDir="false" afterPath="$PROJECT_DIR$/evaluation/results/results.jsonl" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/evaluation/results/summary.md" beforeDir="false" afterPath="$PROJECT_DIR$/evaluation/results/summary.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/quantic_hr/guardrails.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/quantic_hr/guardrails.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_agent_and_bff.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_agent_and_bff.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_mcp.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_mcp.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/frontend/src/App.jsx" root0="FORCE_HIGHLIGHTING" />
+  </component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.3559706979850175" />
+      <entry key="MS500" value="3.6821445728756763" />
+      <entry key="S2" value="5.817566848190768" />
+      <entry key="S5" value="6.487392098644185" />
+      <entry key="S10" value="6.7365256728331575" />
+      <entry key="S30" value="6.910525361286303" />
+      <entry key="S60" value="6.9550528106033" />
+      <entry key="M2" value="6.977473660796361" />
+      <entry key="M5" value="6.990976770335309" />
+      <entry key="M10" value="6.995590491068343" />
+      <entry key="M15" value="7.004509930861083" />
+      <entry key="M30" value="7.581026087201983" />
+      <entry key="H1" value="12.482470999510012" />
+      <entry key="H2" value="24.803498845736755" />
+      <entry key="H4" value="48.08880085742405" />
+      <entry key="D1" value="243.0615354151317" />
+      <entry key="W1" value="939.1243858421487" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="0.0" />
+      <entry key="S5" value="0.0" />
+      <entry key="S10" value="0.0" />
+      <entry key="S30" value="0.0" />
+      <entry key="S60" value="0.0" />
+      <entry key="M2" value="3.939342483190886E-182" />
+      <entry key="M5" value="5.209487695630935E-73" />
+      <entry key="M10" value="1.2465451788305652E-36" />
+      <entry key="M15" value="1.669441156149108E-24" />
+      <entry key="M30" value="2.237225524214088E-12" />
+      <entry key="H1" value="2.5904880042915463E-6" />
+      <entry key="H2" value="0.0027876802770528705" />
+      <entry key="H4" value="0.09144923779752644" />
+      <entry key="D1" value="1.8308978956399946" />
+      <entry key="W1" value="8.910253658240226" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="1.2960780495127882" />
+      <entry key="MS500" value="3.6434214466097936" />
+      <entry key="S2" value="5.8012613729312985" />
+      <entry key="S5" value="6.480013377206912" />
+      <entry key="S10" value="6.732675814199478" />
+      <entry key="S30" value="6.9092045897958085" />
+      <entry key="S60" value="6.954387620803502" />
+      <entry key="M2" value="6.977139855820903" />
+      <entry key="M5" value="6.990842956759275" />
+      <entry key="M10" value="6.9955235316227835" />
+      <entry key="M15" value="7.0044650186358295" />
+      <entry key="M30" value="7.580982002113914" />
+      <entry key="H1" value="12.482299461432167" />
+      <entry key="H2" value="24.805949817024857" />
+      <entry key="H4" value="48.17981113492437" />
+      <entry key="D1" value="244.8920111086301" />
+      <entry key="W1" value="948.0344742702126" />
+    </decayedShown>
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 0,
+  &quot;fromUser&quot;: false
+}</component>
+  <component name="ProjectId" id="3La89bVJtsZ0J0qWjSEoNp56TW3" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.ingest_corpus.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;SHELLCHECK.PATH&quot;: &quot;/Users/hirenvadalia/Library/Application Support/JetBrains/PyCharm2026.2/plugins/Shell Script/shellcheck&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;fix/rag-sections-and-evaluation&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/hirenvadalia/Quantic_HR_Agent/src/quantic_hr&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.jshint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.jshint&quot;: &quot;&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;python.packages.toolwindow.project.migrated.to.right.top.v2&quot;: &quot;true&quot;,
+    &quot;ts.external.directory.path&quot;: &quot;/Users/hirenvadalia/Quantic_HR_Agent/infrastructure/node_modules/typescript/lib&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/src/quantic_hr" />
+      <recent name="$PROJECT_DIR$/evaluation" />
+      <recent name="$PROJECT_DIR$/infrastructure/test" />
+      <recent name="$PROJECT_DIR$/scripts" />
+      <recent name="$PROJECT_DIR$/frontend/src" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/infrastructure/database/migrations" />
+      <recent name="$PROJECT_DIR$/database/migrations" />
+      <recent name="$PROJECT_DIR$" />
+    </key>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-73a66231627c-5bd6d13a2a75-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-262.10968.92" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="c3b3ad5a-711c-45e8-b3f6-6dba1ef95cd6" name="Changes" comment="" />
+      <created>1793680667641</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1793680667641</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>

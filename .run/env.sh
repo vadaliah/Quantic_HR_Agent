@@ -1,0 +1,6 @@
+export AWS_PROFILE='AEA-Sandbox-PowerUser-287238357427'
+export AWS_REGION='us-east-2'
+export BEDROCK_CHAT_INFERENCE_PROFILE='us.amazon.nova-pro-v1:0'
+export BEDROCK_EMBEDDING_MODEL='amazon.titan-embed-text-v2:0'
+export CLUSTER_ARN='arn:aws:rds:us-east-2:287238357427:cluster:quantichragentstack-databaseaurorapostgres6560ef93-h8yvdkzw8voy'
+export SECRET_ARN='arn:aws:secretsmanager:us-east-2:287238357427:secret:quantic-hr-agent/dev/database/admin-e4lGu2'
