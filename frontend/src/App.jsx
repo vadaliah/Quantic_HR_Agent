@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
-const API = import.meta.env.VITE_API_URL || "http" + "://127.0.0.1" + ":8000";
+const API = import.meta.env.VITE_API_URL || "";
+
 
 const DEMOS = [
   { label: "Remote work abroad", employee: "E1007", message: "Can I work from Portugal for six weeks?" },
