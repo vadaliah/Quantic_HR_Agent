@@ -377,7 +377,7 @@ export default function App() {
       .catch(() => setThreads([]));
   }, [turns.length]);
 
-  async function ask(question, employee, forcedThread = null) {
+    async function ask(question, employee, forcedThread = null) {
     if (!question.trim() || busy) return;
     setError("");
     setBusy(true);
@@ -396,15 +396,13 @@ export default function App() {
         return;
       }
       const turn = await response.json();
-      // Only stack turns that belong to the thread already on screen. A new
-      // thread replaces the view, otherwise two employees' questions end up
-      // interleaved under one header.
       const sameThread = turn.thread_id === threadId;
       setThreadId(turn.thread_id);
       setTurns((prev) => {
-        const next = sameThread ? [...prev, turn] : [turn];
-        const clipped = next.slice(-6);
-        setOpenTurn(clipped.length - 1);
+        // Newest first. A new thread replaces the view rather than appending.
+        const next = sameThread ? [turn, ...prev] : [turn];
+        const clipped = next.slice(0, 6);
+        setOpenTurn(0);
         return clipped;
       });
     } catch (err) {
@@ -414,17 +412,14 @@ export default function App() {
     }
   }
 
-  // Reopen a session thread: clear the view, render its stored turns, and point
-  // the composer at its last question. Nothing is executed — the user decides
-  // whether to re-run it.
   async function loadThread(idToLoad) {
     if (busy || !idToLoad) return;
     setError("");
     try {
       const detail = await fetch(`${API}/thread/${idToLoad}`).then((r) => r.json());
       const stored = detail.turns || [];
-      setTurns(stored.slice(-6));
-      setOpenTurn(stored.length ? stored.length - 1 : null);
+      setTurns(stored.slice(-6).reverse());
+      setOpenTurn(stored.length ? 0 : null);
       setThreadId(idToLoad);
       const last = stored[stored.length - 1];
       if (last) {
@@ -436,8 +431,6 @@ export default function App() {
     }
   }
 
-  // Switching employee starts a fresh thread: a thread belongs to one employee,
-  // and the server records whose data was read for every turn.
   function switchEmployee(next) {
     setEmployeeId(next);
     if (turns.length) {
@@ -446,6 +439,7 @@ export default function App() {
       setOpenTurn(null);
     }
   }
+
 
   function newThread() {
     setTurns([]);
