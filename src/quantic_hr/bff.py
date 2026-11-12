@@ -28,7 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from quantic_hr import db
-from quantic_hr.agent import DEFAULT_EMPLOYEE, run_agent
+from quantic_hr.agent import DEFAULT_EMPLOYEE_ID, run_agent
 from quantic_hr.db import execute, query_one
 from quantic_hr.prompt_log import new_prompt_id, persist_prompt
 from quantic_hr.guardrails import needs_clarification, is_out_of_corpus, REFUSAL_TEXT
@@ -76,7 +76,7 @@ def warm_database() -> None:
 
 class ChatRequest(BaseModel):
     message: str
-    employee_id: str = Field(default=DEFAULT_EMPLOYEE)
+    employee_id: str = Field(default=DEFAULT_EMPLOYEE_ID)
     thread_id: str | None = None
 
 
