@@ -61,7 +61,7 @@ def check_pto_balance(employee_id: str) -> dict[str, Any]:
         if key in {"employee_id", "plan", "balance_year"}:
             result[key] = value
         elif key == "as_of":
-            result[key] = value.isoformat()
+            result[key] = value.isoformat() if hasattr(value, "isoformat") else value
         else:
             result[key] = float(value)
     result["policy_document_id"] = "POL-001"
