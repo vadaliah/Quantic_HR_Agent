@@ -21,12 +21,14 @@ import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
+import os, sys
+
 
 CLUSTER_ARN = os.environ.get("CLUSTER_ARN", "")
 SECRET_ARN = os.environ.get("SECRET_ARN", "")
 DATABASE = os.environ.get("DB_NAME", "quantic_hr_agent")
 REGION = os.environ.get("AWS_REGION", "us-east-2")
-
+print("mcp env:", {k: bool(os.environ.get(k)) for k in ("CLUSTER_ARN", "SECRET_ARN")}, file=sys.stderr)
 
 def using_data_api() -> bool:
     return bool(CLUSTER_ARN and SECRET_ARN)
@@ -107,10 +109,42 @@ def database_url() -> str:
         "DATABASE_URL", "postgresql://quantic:quantic@127.0.0.1:5433/quantic_hr"
     )
 
+class _DataApiResult:
+    """The .fetchone()/.fetchall() surface the tools expect."""
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self._rows = rows
+    def fetchone(self) -> dict[str, Any] | None:
+        return self._rows[0] if self._rows else None
+    def fetchall(self) -> list[dict[str, Any]]:
+        return self._rows
+    def __iter__(self):
+        return iter(self._rows)
+
+
+class _DataApiConnection:
+    """Adapter so `with connection() as conn: conn.execute(sql, params)` works
+    over the Data API instead of a socket."""
+    def execute(self, sql: str, parameters: tuple | list | None = None) -> _DataApiResult:
+        return _DataApiResult(execute(sql, list(parameters) if parameters else None))
+    def commit(self) -> None:
+        return None
+    def rollback(self) -> None:
+        return None
+
+
 
 @contextmanager
 def connection() -> Iterator[Any]:
-    """Direct Postgres connection. Raises if no route to the cluster exists."""
+    """A connection-like object backed by whichever path is configured.
+
+    Data API when CLUSTER_ARN and SECRET_ARN are set, psycopg otherwise. The
+    MCP tools call this, so without the delegation each one opened a socket to
+    127.0.0.1:5433, which does not exist in the container.
+    """
+    if using_data_api():
+        yield _DataApiConnection()
+        return
+
     import psycopg
     from psycopg.rows import dict_row
 
@@ -123,6 +157,7 @@ def connection() -> Iterator[Any]:
         raise
     finally:
         conn.close()
+
 
 
 def health() -> dict[str, Any]:
