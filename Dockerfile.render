@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1
+# Build revision: 3
 # Quantic HR agent on Render (free web service): one container serves the
 # built React UI at / and the API (/chat, /health, /ping) on the same origin,
 # listening on $PORT. Any architecture (Render builds linux/amd64).
