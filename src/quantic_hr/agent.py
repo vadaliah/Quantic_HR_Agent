@@ -48,6 +48,8 @@ Be brief: a short answer, then the key conditions or next step."""
 class AgentState(TypedDict, total=False):
     message: str
     employee_id: str
+    history: list[dict[str, Any]]
+    prompt_id: str | None
     mode: str
     model: str | None
     abstained: bool
@@ -328,8 +330,18 @@ def build_graph():
 GRAPH = build_graph()
 
 
-def run_agent(message: str, employee_id: str = DEFAULT_EMPLOYEE_ID) -> dict[str, Any]:
-    result = GRAPH.invoke({"message": message, "employee_id": employee_id})
+def run_agent(
+    message: str,
+    employee_id: str = DEFAULT_EMPLOYEE_ID,
+    history: list[dict[str, Any]] | None = None,
+    prompt_id: str | None = None,
+) -> dict[str, Any]:
+    result = GRAPH.invoke({
+        "message": message,
+        "employee_id": employee_id,
+        "history": history or [],
+        "prompt_id": prompt_id,
+    })
     return {
         "answer": result.get("answer", ""),
         "mode": result.get("mode", "keyword"),
