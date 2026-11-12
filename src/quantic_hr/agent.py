@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -30,8 +31,13 @@ ROOT = Path(__file__).resolve().parents[2]
 # Seed data (mock_data/employees.json) uses E1001-E1025; E1007 is the remote-work demo.
 DEFAULT_EMPLOYEE_ID = "E1007"
 MAX_TOOL_ROUNDS = 6
+
+# A retrieval hit only has to clear the search floor to be useful to the model.
+# What is DISPLAYED as evidence needs a stricter bar: a weak match presented as
+# a citation invites the reader to trust something the corpus almost supports.
 CITATION_MIN_SCORE = 0.35
 CITATION_LIMIT = 3
+
 ABSTAIN_MESSAGE = (
     "I could not find this in the Acme Corp HR policies or your HR records, so I will not guess. "
     "Please contact People Operations."
@@ -60,7 +66,7 @@ class AgentState(TypedDict, total=False):
     planned_calls: list[dict[str, Any]]
     tool_trace: list[dict[str, Any]]
     steps: list[dict[str, Any]]
-    citations: list[dict[str, str]]
+    citations: list[dict[str, Any]]
     snippets: list[str]
     answer: str
 
@@ -84,8 +90,8 @@ def _steps_from(traces: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return steps
 
 
-
 def _plan(message: str, employee_id: str) -> list[dict[str, Any]]:
+    """Keyword fallback plan, used only when Bedrock is unavailable."""
     text = message.lower()
     calls: list[dict[str, Any]] = []
     if employee_id:
@@ -124,8 +130,10 @@ def _summarize(result: Any) -> str:
 def _citations_from(result: Any) -> list[dict[str, Any]]:
     """Citations, each carrying the passage that supports it.
 
-    The snippet sits on the citation rather than in a parallel list, so sorting
-    or capping cannot separate a citation from its evidence.
+    The snippet sits ON the citation rather than in a parallel list. Two parallel
+    lists drift apart the moment one is sorted or capped, which is how the panel
+    came to render an empty box under each entry: the citation and its text were
+    sliced by different indices.
     """
     citations: list[dict[str, Any]] = []
     if isinstance(result, dict):
@@ -142,6 +150,8 @@ def _citations_from(result: Any) -> list[dict[str, Any]]:
                     "score": round(float(score), 4) if score is not None else None,
                     "snippet": str(match.get("content", ""))[:260],
                 })
+        # A compliance check returns a route, not a chunk, so its citation has
+        # no passage behind it. The tool's own reason is the text it does have.
         if result.get("policy_document_id"):
             citations.append({
                 "document_id": str(result["policy_document_id"]),
@@ -153,6 +163,24 @@ def _citations_from(result: Any) -> list[dict[str, Any]]:
     return citations
 
 
+def _collect(traces: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Deduplicated citations, strongest first, capped.
+
+    Returns ONE list. Every caller reads it as a single value — the parallel
+    snippets array is gone, because the snippet now travels with its citation.
+    """
+    citations: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for trace in traces:
+        if trace.get("is_error"):
+            continue
+        for cite in _citations_from(trace.get("result")):
+            key = (cite["document_id"], cite["section_id"])
+            if cite["document_id"] and key not in seen:
+                seen.add(key)
+                citations.append(cite)
+    citations.sort(key=lambda c: float(c.get("score") or 0), reverse=True)
+    return citations[:CITATION_LIMIT]
 
 
 @asynccontextmanager
@@ -209,11 +237,12 @@ def _json_safe(payload: Any) -> dict[str, Any]:
     data = json.loads(json.dumps(payload, default=str))
     return data if isinstance(data, dict) else {"result": data}
 
+
 def _history_messages(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Prior turns as Converse messages, oldest first.
 
-    Only the question and the final answer go in. Tool traces from earlier turns
-    are deliberately excluded: re-sending stale tool output invites the model to
+    Only the question and the final answer are replayed. Earlier tool output is
+    deliberately excluded: re-sending a stale toolResult invites the model to
     cite a result it did not retrieve in this run.
     """
     messages: list[dict[str, Any]] = []
@@ -280,25 +309,6 @@ async def _converse_loop(
     return text, traces  # text is empty if the tool-round budget ran out
 
 
-def _collect(traces: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    citations: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
-    for trace in traces:
-        if trace.get("is_error"):
-            continue
-        for cite in _citations_from(trace.get("result")):
-            key = (cite["document_id"], cite["section_id"])
-            if cite["document_id"] and key not in seen:
-                seen.add(key)
-                citations.append(cite)
-    citations.sort(key=lambda c: float(c.get("score") or 0), reverse=True)
-    return citations[:CITATION_LIMIT]
-
-
-
-
-import re
-
 _THINK = re.compile(r"<thinking>.*?</thinking>", re.S | re.I)
 
 
@@ -311,7 +321,11 @@ def _clean(text: str) -> str:
 def converse_node(state: AgentState) -> AgentState:
     try:
         text, traces = asyncio.run(
-            _converse_loop(state["message"], state["employee_id"], state.get("history"))
+            _converse_loop(
+                state["message"],
+                state["employee_id"],
+                state.get("history"),
+            )
         )
     except bedrock.BedrockUnavailable as exc:
         return {**state, "fallback_reason": str(exc)}
@@ -324,7 +338,7 @@ def converse_node(state: AgentState) -> AgentState:
         "tool_trace": traces,
         "steps": _steps_from(traces),
         "citations": [] if abstained else citations,
-        "snippets": [] if abstained else snippets,
+        "snippets": [],
         "answer": ABSTAIN_MESSAGE if abstained else _clean(text),
         "abstained": abstained,
     }
@@ -351,10 +365,15 @@ def plan_node(state: AgentState) -> AgentState:
     }
 
 
-# tools_node
 def tools_node(state: AgentState) -> AgentState:
     traces = asyncio.run(_run_mcp(state.get("planned_calls") or []))
-    return {**state, "tool_trace": traces, "citations": _collect(traces), "snippets": []}
+    return {
+        **state,
+        "tool_trace": traces,
+        "steps": _steps_from(traces),
+        "citations": _collect(traces),
+        "snippets": [],
+    }
 
 
 def synthesize_node(state: AgentState) -> AgentState:
@@ -424,7 +443,7 @@ def run_agent(
         "fallback_reason": result.get("fallback_reason"),
         "citations": result.get("citations", []),
         "snippets": result.get("snippets", []),
-        "steps": result.get("steps", []),          # ← new: drives the Decision path panel
+        "steps": result.get("steps", []),
         "tool_trace": [
             {
                 "name": item["name"],
@@ -434,4 +453,3 @@ def run_agent(
             for item in result.get("tool_trace", [])
         ],
     }
-
