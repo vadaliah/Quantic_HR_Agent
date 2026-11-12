@@ -8,11 +8,10 @@
 
 FROM node:22-slim AS ui
 WORKDIR /ui
-COPY frontend/package.json frontend/package-lock.json ./
+COPY frontend/ ./
 RUN npm ci --no-audit --no-fund
-COPY frontend/index.html frontend/vite.config.js ./
-COPY frontend/src ./src
 RUN npm run build
+
 
 FROM ghcr.io/astral-sh/uv:0.12.3 AS uv
 
