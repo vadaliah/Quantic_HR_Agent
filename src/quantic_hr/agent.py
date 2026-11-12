@@ -57,9 +57,30 @@ class AgentState(TypedDict, total=False):
     fallback_reason: str | None
     planned_calls: list[dict[str, Any]]
     tool_trace: list[dict[str, Any]]
+    steps: list[dict[str, Any]]
     citations: list[dict[str, str]]
     snippets: list[str]
     answer: str
+
+
+def _steps_from(traces: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Operational steps for the Decision path panel.
+
+    Built from tool output only. The model's own narration is never included:
+    it is unverified, and it has stated policy obligations that do not exist in
+    the corpus.
+    """
+    steps = []
+    for index, trace in enumerate(traces, start=1):
+        steps.append({
+            "kind": "tool_call",
+            "tool": trace["name"],
+            "arguments": trace["arguments"],
+            "detail": trace.get("output_summary"),
+            "iteration": index,
+        })
+    return steps
+
 
 
 def _plan(message: str, employee_id: str) -> list[dict[str, Any]]:
@@ -267,6 +288,7 @@ def converse_node(state: AgentState) -> AgentState:
         "mode": "bedrock",
         "model": bedrock.chat_model_id(),
         "tool_trace": traces,
+        "steps": _steps_from(traces),
         "citations": [] if abstained else citations,
         "snippets": [] if abstained else snippets,
         "answer": ABSTAIN_MESSAGE if abstained else _clean(text),
@@ -348,6 +370,12 @@ def run_agent(
     history: list[dict[str, Any]] | None = None,
     prompt_id: str | None = None,
 ) -> dict[str, Any]:
+    """Run the graph and return the turn the BFF stores and the UI renders.
+
+    Keys the caller depends on:
+      answer, mode, model, abstained, fallback_reason,
+      citations, snippets, tool_trace, steps
+    """
     result = GRAPH.invoke({
         "message": message,
         "employee_id": employee_id,
@@ -362,6 +390,7 @@ def run_agent(
         "fallback_reason": result.get("fallback_reason"),
         "citations": result.get("citations", []),
         "snippets": result.get("snippets", []),
+        "steps": result.get("steps", []),          # ← new: drives the Decision path panel
         "tool_trace": [
             {
                 "name": item["name"],
@@ -371,3 +400,4 @@ def run_agent(
             for item in result.get("tool_trace", [])
         ],
     }
+

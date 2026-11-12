@@ -396,11 +396,16 @@ export default function App() {
         return;
       }
       const turn = await response.json();
+      // Only stack turns that belong to the thread already on screen. A new
+      // thread replaces the view, otherwise two employees' questions end up
+      // interleaved under one header.
+      const sameThread = turn.thread_id === threadId;
       setThreadId(turn.thread_id);
       setTurns((prev) => {
-        const next = [...prev, turn].slice(-6);
-        setOpenTurn(next.length - 1);
-        return next;
+        const next = sameThread ? [...prev, turn] : [turn];
+        const clipped = next.slice(-6);
+        setOpenTurn(clipped.length - 1);
+        return clipped;
       });
     } catch (err) {
       setError(String(err));
@@ -431,6 +436,25 @@ export default function App() {
     }
   }
 
+  // Switching employee starts a fresh thread: a thread belongs to one employee,
+  // and the server records whose data was read for every turn.
+  function switchEmployee(next) {
+    setEmployeeId(next);
+    if (turns.length) {
+      setTurns([]);
+      setThreadId(null);
+      setOpenTurn(null);
+    }
+  }
+
+  function newThread() {
+    setTurns([]);
+    setThreadId(null);
+    setOpenTurn(null);
+  }
+
+  const mixedEmployees = new Set(turns.map((t) => t.employee_id)).size > 1;
+
   return (
     <div style={S.page}>
       <header style={{
@@ -445,160 +469,136 @@ export default function App() {
         </h1>
         <p style={{ margin: "6px 0 16px", color: "#475569", fontSize: 13.5 }}>
           Agentic RAG over Aurora pgvector, reached through MCP tools.
-          {threadId && (
-            <span style={{
-              ...S.mono, marginLeft: 10, fontSize: 11.5, fontWeight: 700,
-              background: "#fff", border: "2px solid #cbd5e1",
-              borderRadius: 7, padding: "2px 8px",
-            }}>
-              thread {threadId}
-            </span>
-          )}
         </p>
-        <div style={{ display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
-          {DEMOS.map((d) => (
-            <button key={d.label} type="button" disabled={busy}
-              onClick={() => { setEmployeeId(d.employee); setMessage(d.message); ask(d.message, d.employee); }}
-              style={{
-                background: "#fff", border: "2px solid #94a3b8", borderRadius: 10,
-                padding: "7px 14px", fontSize: 13, fontWeight: 700, color: "#1e293b",
-                cursor: busy ? "not-allowed" : "pointer",
-                boxShadow: "0 3px 0 0 #cbd5e1",
-              }}>
-              {d.label}
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10,
+                      alignItems: "center" }}>
+          {DEMOS.map((demo) => (
+            <button
+              key={demo.label}
+              onClick={() => { setEmployeeId(demo.employee); setMessage(demo.message); }}
+              style={{ ...S.control, cursor: "pointer" }}
+            >
+              {demo.label}
             </button>
           ))}
-          <button type="button"
-            onClick={() => { setTurns([]); setThreadId(null); setOpenTurn(null); }}
-            style={{
-              background: "#fff", border: "2px solid #94a3b8", borderRadius: 10,
-              padding: "7px 14px", fontSize: 13, fontWeight: 700, color: "#475569",
-              cursor: "pointer", boxShadow: "0 3px 0 0 #cbd5e1",
-            }}>
+
+          <button onClick={newThread} style={{ ...S.control, cursor: "pointer" }}>
             New thread
           </button>
-          <label style={{ fontSize: 13, color: "#334155", fontWeight: 600 }}>
-            Threads{" "}
-            <select value="" disabled={busy || threads.length === 0}
-              onChange={(e) => loadThread(e.target.value)}
-              style={S.control}>
-              <option value="">
-                {threads.length === 0
-                  ? "none yet"
-                  : threadId ? `current ${threadId}` : "select…"}
-              </option>
-              {threads.map((t) => (
+
+          <select
+            value={threadId || ""}
+            onChange={(e) => e.target.value && loadThread(e.target.value)}
+            style={{ ...S.control, minWidth: 220 }}
+          >
+            <option value="">{threadId ? `current ${threadId}` : "new thread"}</option>
+            {threads
+              .filter((t) => t.thread_id !== threadId)
+              .map((t) => (
                 <option key={t.thread_id} value={t.thread_id}>
-                  {t.thread_id} · {t.turns} turn{t.turns === 1 ? "" : "s"} —{" "}
-                  {String(t.first_question).slice(0, 40)}
+                  {t.thread_id} · {t.turns} turn{t.turns === 1 ? "" : "s"} ·{" "}
+                  {(t.last_question || "").slice(0, 40)}
                 </option>
               ))}
-            </select>
-          </label>
-          <label style={{ marginLeft: "auto", fontSize: 13, color: "#334155",
-                          fontWeight: 600 }}>
-              <a href={`${API}/evaluation`} target="_blank" rel="noreferrer"
-   style={{ marginLeft: "auto", fontSize: 12, fontWeight: 800, color: "#4f46e5",
-            border: "2px solid #c7d2fe", background: "#eef2ff", borderRadius: 8,
-            padding: "6px 12px", textDecoration: "none", whiteSpace: "nowrap" }}>
-  Evaluation dashboard
-</a>
+          </select>
 
-            Employee{" "}
-            <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}
-              style={S.control}>
+          {/* Same tab, so the browser Back button returns here too. */}
+          <a
+            href="/evaluation"
+            style={{ ...S.control, marginLeft: "auto", textDecoration: "none",
+                     color: "#1d4ed8", borderColor: "#93b8f7", background: "#e0ecff",
+                     fontWeight: 800, fontSize: 12.5, cursor: "pointer" }}
+          >
+            Evaluation dashboard
+          </a>
+
+          <label style={{ fontSize: 13, color: "#334155", fontWeight: 600,
+                          display: "flex", alignItems: "center", gap: 7 }}>
+            Employee
+            <select
+              value={employeeId}
+              onChange={(e) => switchEmployee(e.target.value)}
+              style={{ ...S.control, minWidth: 200 }}
+            >
               {employees.length === 0 && (
-                <option value={employeeId}>{employeeId} — loading…</option>
+                <option value={employeeId}>{employeeId}</option>
               )}
               {employees.map((e) => (
                 <option key={e.employee_id} value={e.employee_id}>
                   {e.employee_id} — {e.display_name}
                   {e.employment_type !== "FT" ? ` · ${e.employment_type}` : ""}
-                  {e.remote_eligible ? "" : " · not remote-eligible"}
                 </option>
               ))}
             </select>
-            {employeeError && (
-              <span style={{ color: "#b91c1c", marginLeft: 8, fontSize: 12 }}>
-                employee list unavailable
-              </span>
-            )}
           </label>
+
+          {employeeError && (
+            <span style={{ color: "#b91c1c", fontSize: 12, fontWeight: 700 }}>
+              employee list unavailable
+            </span>
+          )}
         </div>
       </header>
 
-      <main style={{ paddingTop: 32 }}>
-        {turns.length === 0 && (
-          <div style={{
-            color: "#64748b", fontSize: 14.5, textAlign: "center",
-            padding: "72px 24px", fontWeight: 500, lineHeight: 1.7,
-          }}>
-            Ask a question, or use a demo button above.
-            <br />
-            Pick a thread to reopen what was already asked.
-          </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12,
+                    flexWrap: "wrap", marginBottom: 14 }}>
+        <span style={{ ...S.label, color: "#64748b" }}>Conversation</span>
+        <span style={{ ...S.mono, textTransform: "none", letterSpacing: 0 }}>
+          {threadId || "new thread"} · {turns.length} turn{turns.length === 1 ? "" : "s"}
+          {turns.length ? ` · prompt ${turns[turns.length - 1].prompt_id}` : ""}
+        </span>
+        {mixedEmployees && (
+          <span style={{ color: "#b45309", fontWeight: 800, fontSize: 11 }}>
+            mixed employees — start a new thread
+          </span>
         )}
-          {turns.length > 0 && (
-          <div style={{
-            display: "flex", alignItems: "baseline", gap: 10,
-            marginBottom: 18, paddingBottom: 12,
-            borderBottom: "2px solid #cbd5e1",
-          }}>
-            <span style={{ fontSize: 16, fontWeight: 800, color: "#334155" }}>
-              Conversation
-            </span>
-            <span style={{ ...S.mono, fontSize: 12, color: "#64748b" }}>
-              {threadId} · {turns.length} turn{turns.length === 1 ? "" : "s"}
-              {turns[turns.length - 1].prompt_id
-                ? ` · prompt ${turns[turns.length - 1].prompt_id}`
-                : ""}
-            </span>
-          </div>
-        )}
-        {turns.map((turn, i) => (
-          <Turn key={i} turn={turn} index={i}
-                expanded={openTurn === i}
-                onToggle={() => setOpenTurn(openTurn === i ? null : i)} />
-        ))}
-      </main>
+      </div>
 
-      <form onSubmit={(e) => { e.preventDefault(); ask(message, employeeId); }}
-            style={{
-              position: "fixed", bottom: 0, left: 0, right: 0,
-              background: "rgba(255,255,255,.97)", backdropFilter: "blur(10px)",
-              borderTop: "3px solid #cbd5e1", padding: "16px 24px",
-              boxShadow: "0 -12px 30px -24px rgba(15,23,42,.5)",
-            }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", display: "flex", gap: 12 }}>
-          <textarea rows={2} value={message} autoComplete="off"
+      {error && (
+        <div style={{ background: "#fee2e2", border: "2px solid #fca5a5",
+                      borderRadius: 10, padding: "10px 14px", marginBottom: 16,
+                      color: "#7f1d1d", fontSize: 13, fontWeight: 600 }}>
+          {error}
+        </div>
+      )}
+
+      {turns.map((turn, i) => (
+        <Turn
+          key={turn.prompt_id || i}
+          turn={turn}
+          expanded={openTurn === i}
+          onToggle={() => setOpenTurn(openTurn === i ? null : i)}
+        />
+      ))}
+
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0,
+                    background: "rgba(238,242,247,.96)",
+                    backdropFilter: "blur(10px)", borderTop: "3px solid #cbd5e1",
+                    padding: "14px 24px" }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", display: "flex",
+                      gap: 12, alignItems: "flex-end" }}>
+          <textarea
+            value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(message, employeeId); } }}
-            placeholder={turns.length
-              ? "Ask a follow-up, e.g. “what if it were $500?”"
-              : "Ask about PTO, remote work, expenses or benefits…"}
-            style={{
-              flex: 1, padding: 12, fontFamily: "inherit", fontSize: 14.5,
-              borderRadius: 11, border: "2px solid #94a3b8", resize: "vertical",
-              background: "#fff", fontWeight: 500,
-            }} />
-          <button type="submit" disabled={busy}
-            style={{
-              padding: "0 26px", fontSize: 15, fontWeight: 800, borderRadius: 11,
-              border: "2px solid #0f766e", color: "#fff",
-              background: busy ? "#94a3b8" : "#0f766e",
-              cursor: busy ? "not-allowed" : "pointer",
-              boxShadow: busy ? "none" : "0 4px 0 0 #134e4a",
-            }}>
+            rows={2}
+            placeholder="Ask an HR policy or workflow question…"
+            style={{ flex: 1, borderRadius: 10, border: "2px solid #94a3b8",
+                     padding: "10px 12px", fontSize: 14, fontFamily: "inherit",
+                     resize: "vertical" }}
+          />
+          <button
+            onClick={() => ask(message, employeeId)}
+            disabled={busy}
+            style={{ borderRadius: 10, border: "none", padding: "12px 22px",
+                     fontSize: 14, fontWeight: 800, color: "#fff",
+                     background: busy ? "#94a3b8" : "#047857",
+                     cursor: busy ? "wait" : "pointer" }}
+          >
             {busy ? "Working…" : "Ask"}
           </button>
         </div>
-        {error && (
-          <div style={{ maxWidth: 1280, margin: "10px auto 0", color: "#b91c1c",
-                        fontSize: 13.5, fontWeight: 700 }}>
-            {error}
-          </div>
-        )}
-      </form>
+      </div>
     </div>
   );
 }
