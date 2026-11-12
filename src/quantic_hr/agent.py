@@ -49,6 +49,11 @@ Rules:
 - The employee_id is fixed by the session; do not ask for or use another one.
 - Cite every policy statement as [document_id section_id], for example [POL-001 2.1].
 - draft_hr_email only drafts; never say an email was sent or a record was changed.
+- Never compare a figure the user names against a figure in a policy passage
+  yourself. If the question contains an amount, a day count or a duration,
+  call check_policy_compliance and use its result.
+- A section titled "What is not reimbursed" describes exclusions. Do not use it
+  to decide whether something IS reimbursable.
 - If the tools return nothing relevant, reply exactly: {ABSTAIN_MESSAGE}
 - Do not include reasoning, planning or thinking tags in your answer. Reply
   with the answer only, Be brief: a short answer, then the key conditions or next step."""
@@ -179,7 +184,10 @@ def _collect(traces: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if cite["document_id"] and key not in seen:
                 seen.add(key)
                 citations.append(cite)
-    citations.sort(key=lambda c: float(c.get("score") or 0), reverse=True)
+    citations.sort(
+        key=lambda c: (c.get("score") is not None, float(c.get("score") or 0)),
+        reverse=True,
+    )
     return citations[:CITATION_LIMIT]
 
 
