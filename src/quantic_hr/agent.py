@@ -30,6 +30,8 @@ ROOT = Path(__file__).resolve().parents[2]
 # Seed data (mock_data/employees.json) uses E1001-E1025; E1007 is the remote-work demo.
 DEFAULT_EMPLOYEE_ID = "E1007"
 MAX_TOOL_ROUNDS = 6
+CITATION_MIN_SCORE = 0.35
+CITATION_LIMIT = 3
 ABSTAIN_MESSAGE = (
     "I could not find this in the Acme Corp HR policies or your HR records, so I will not guess. "
     "Please contact People Operations."
@@ -119,30 +121,38 @@ def _summarize(result: Any) -> str:
     return text[:500]
 
 
-def _citations_from(result: Any) -> tuple[list[dict[str, str]], list[str]]:
-    citations: list[dict[str, str]] = []
-    snippets: list[str] = []
+def _citations_from(result: Any) -> list[dict[str, Any]]:
+    """Citations, each carrying the passage that supports it.
+
+    The snippet sits on the citation rather than in a parallel list, so sorting
+    or capping cannot separate a citation from its evidence.
+    """
+    citations: list[dict[str, Any]] = []
     if isinstance(result, dict):
         matches = result.get("matches")
         if isinstance(matches, list):
             for match in matches:
-                citations.append(
-                    {
-                        "document_id": str(match.get("document_id", "")),
-                        "section_id": str(match.get("section_id", "")),
-                        "title": str(match.get("title", "")),
-                    }
-                )
-                snippets.append(str(match.get("content", ""))[:240])
+                score = match.get("score")
+                if score is not None and float(score) < CITATION_MIN_SCORE:
+                    continue
+                citations.append({
+                    "document_id": str(match.get("document_id", "")),
+                    "section_id": str(match.get("section_id", "")),
+                    "title": str(match.get("title", "")),
+                    "score": round(float(score), 4) if score is not None else None,
+                    "snippet": str(match.get("content", ""))[:260],
+                })
         if result.get("policy_document_id"):
-            citations.append(
-                {
-                    "document_id": str(result["policy_document_id"]),
-                    "section_id": str(result.get("policy_section_id", "")),
-                    "title": str(result.get("check_type", "policy")),
-                }
-            )
-    return citations, snippets
+            citations.append({
+                "document_id": str(result["policy_document_id"]),
+                "section_id": str(result.get("policy_section_id", "")),
+                "title": str(result.get("check_type", "policy")),
+                "score": None,
+                "snippet": str(result.get("reason", ""))[:260],
+            })
+    return citations
+
+
 
 
 @asynccontextmanager
@@ -199,8 +209,29 @@ def _json_safe(payload: Any) -> dict[str, Any]:
     data = json.loads(json.dumps(payload, default=str))
     return data if isinstance(data, dict) else {"result": data}
 
+def _history_messages(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Prior turns as Converse messages, oldest first.
 
-async def _converse_loop(message: str, employee_id: str) -> tuple[str, list[dict[str, Any]]]:
+    Only the question and the final answer go in. Tool traces from earlier turns
+    are deliberately excluded: re-sending stale tool output invites the model to
+    cite a result it did not retrieve in this run.
+    """
+    messages: list[dict[str, Any]] = []
+    for turn in history:
+        question = (turn.get("question") or "").strip()
+        answer = (turn.get("answer") or "").strip()
+        if not question or not answer:
+            continue
+        messages.append({"role": "user", "content": [{"text": question}]})
+        messages.append({"role": "assistant", "content": [{"text": answer}]})
+    return messages
+
+
+async def _converse_loop(
+    message: str,
+    employee_id: str,
+    history: list[dict[str, Any]] | None = None,
+) -> tuple[str, list[dict[str, Any]]]:
     """Bedrock Converse tool-use loop over the MCP tools. Raises BedrockUnavailable."""
     traces: list[dict[str, Any]] = []
     failure: bedrock.BedrockUnavailable | None = None
@@ -211,7 +242,8 @@ async def _converse_loop(message: str, employee_id: str) -> tuple[str, list[dict
         listed = await session.list_tools()
         specs = [bedrock.tool_spec(t.name, t.description or t.name, t.inputSchema) for t in listed.tools]
         messages: list[dict[str, Any]] = [
-            {"role": "user", "content": [{"text": f"Signed-in employee_id: {employee_id}\n\n{message}"}]}
+            *_history_messages(history or []),
+            {"role": "user", "content": [{"text": f"Signed-in employee_id: {employee_id}\n\n{message}"}]},
         ]
         for _ in range(MAX_TOOL_ROUNDS):
             try:
@@ -248,21 +280,21 @@ async def _converse_loop(message: str, employee_id: str) -> tuple[str, list[dict
     return text, traces  # text is empty if the tool-round budget ran out
 
 
-def _collect(traces: list[dict[str, Any]]) -> tuple[list[dict[str, str]], list[str]]:
-    citations: list[dict[str, str]] = []
-    snippets: list[str] = []
+def _collect(traces: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    citations: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for trace in traces:
         if trace.get("is_error"):
             continue
-        extra_cites, extra_snips = _citations_from(trace.get("result"))
-        for cite in extra_cites:
+        for cite in _citations_from(trace.get("result")):
             key = (cite["document_id"], cite["section_id"])
             if cite["document_id"] and key not in seen:
                 seen.add(key)
                 citations.append(cite)
-        snippets.extend(extra_snips)
-    return citations, snippets
+    citations.sort(key=lambda c: float(c.get("score") or 0), reverse=True)
+    return citations[:CITATION_LIMIT]
+
+
 
 
 import re
@@ -278,10 +310,12 @@ def _clean(text: str) -> str:
 
 def converse_node(state: AgentState) -> AgentState:
     try:
-        text, traces = asyncio.run(_converse_loop(state["message"], state["employee_id"]))
+        text, traces = asyncio.run(
+            _converse_loop(state["message"], state["employee_id"], state.get("history"))
+        )
     except bedrock.BedrockUnavailable as exc:
         return {**state, "fallback_reason": str(exc)}
-    citations, snippets = _collect(traces)
+    citations = _collect(traces)
     abstained = not citations or not text or ABSTAIN_MESSAGE in text
     return {
         **state,
@@ -317,10 +351,10 @@ def plan_node(state: AgentState) -> AgentState:
     }
 
 
+# tools_node
 def tools_node(state: AgentState) -> AgentState:
     traces = asyncio.run(_run_mcp(state.get("planned_calls") or []))
-    citations, snippets = _collect(traces)
-    return {**state, "tool_trace": traces, "citations": citations, "snippets": snippets}
+    return {**state, "tool_trace": traces, "citations": _collect(traces), "snippets": []}
 
 
 def synthesize_node(state: AgentState) -> AgentState:
