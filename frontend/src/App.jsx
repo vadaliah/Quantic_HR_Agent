@@ -412,6 +412,28 @@ export default function App() {
     }
   }
 
+
+
+  async function loadThread(idToLoad) {
+    if (busy || !idToLoad) return;
+    setError("");
+    try {
+      const detail = await fetch(`${API}/thread/${idToLoad}`).then((r) => r.json());
+      const stored = detail.turns || [];
+      setTurns(stored.slice(-6).reverse());
+      setOpenTurn(stored.length ? 0 : null);
+      setThreadId(idToLoad);
+      const last = stored[stored.length - 1];
+      if (last) {
+        setMessage(last.question || "");
+        if (last.employee_id) setEmployeeId(last.employee_id);
+      }
+    } catch (err) {
+      setError(String(err));
+    }
+      // Reopen a session thread: clear the view, render its stored turns newest
+  // first, and point the composer at the last question. Nothing is executed —
+  // the user decides whether to re-run it.
   async function loadThread(idToLoad) {
     if (busy || !idToLoad) return;
     setError("");
@@ -430,6 +452,7 @@ export default function App() {
       setError(String(err));
     }
   }
+
 
   function switchEmployee(next) {
     setEmployeeId(next);
