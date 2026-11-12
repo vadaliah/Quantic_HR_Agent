@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Quantic HR Agent — Evaluation Dashboard</title>
+<style>
+  :root{
+    --bg:#eef2f7; --card:#fff; --ink:#0f172a; --muted:#64748b; --line:#cbd5e1;
+    --pass:#047857; --pass-soft:#dcfce9; --fail:#b91c1c; --fail-soft:#fee2e2;
+    --warn:#b45309; --warn-soft:#fef3c7; --accent:#4f46e5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
+       background:var(--bg);color:var(--ink);padding:28px 24px 80px}
+  h1{margin:0 0 4px;font-size:26px;font-weight:900;letter-spacing:-.025em}
+  .sub{color:var(--muted);font-size:13.5px;margin-bottom:22px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:26px}
+  .metric{background:var(--card);border:2px solid var(--line);border-radius:14px;
+          border-top:4px solid var(--accent);padding:15px 17px;
+          box-shadow:5px 5px 0 0 #e2e8f0,0 10px 24px -18px rgba(15,23,42,.5)}
+  .metric .k{font-size:10.5px;font-weight:800;text-transform:uppercase;
+             letter-spacing:.1em;color:var(--muted)}
+  .metric .v{font-size:29px;font-weight:900;letter-spacing:-.02em;margin-top:5px}
+  .bar{height:7px;border-radius:99px;background:#e2e8f0;margin-top:10px;overflow:hidden}
+  .bar > i{display:block;height:100%;border-radius:99px;background:var(--accent)}
+  section{background:var(--card);border:2px solid var(--line);border-radius:14px;
+          padding:18px 20px;margin-bottom:22px;box-shadow:0 10px 30px -22px rgba(15,23,42,.6)}
+  h2{margin:0 0 14px;font-size:15px;font-weight:800;text-transform:uppercase;
+     letter-spacing:.08em;color:#334155}
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px}
+  .chip{border:2px solid var(--line);background:#f8fafc;border-radius:999px;
+        padding:6px 13px;font-size:12.5px;font-weight:700;cursor:pointer;color:#334155}
+  .chip:hover{border-color:var(--accent)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px}
+  .chart h3{margin:0 0 10px;font-size:12px;font-weight:800;text-transform:uppercase;
+            letter-spacing:.08em;color:var(--muted)}
+  .pie-wrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  svg.pie{flex:0 0 auto}
+  .legend{font-size:12.5px;line-height:1.85;min-width:150px}
+  .legend .row{display:flex;align-items:center;gap:8px;cursor:pointer;padding:1px 4px;border-radius:6px}
+  .legend .row:hover{background:#f1f5f9}
+  .legend .row.on{background:#e0e7ff;font-weight:800}
+  .swatch{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+  .legend .n{color:var(--muted);font-variant-numeric:tabular-nums;margin-left:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.8px}
+  th{text-align:left;font-size:10.5px;font-weight:800;text-transform:uppercase;
+     letter-spacing:.07em;color:var(--muted);padding:8px 9px;border-bottom:2px solid var(--line);
+     white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:0;background:#fff}
+  th:hover{color:var(--accent)}
+  td{padding:8px 9px;border-bottom:1px solid #e8edf3;vertical-align:top}
+  tr:hover td{background:#f8fafc}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;
+        font-weight:800;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+  .p-pass{background:var(--pass-soft);color:var(--pass);border:1.5px solid #8fd9b8}
+  .p-fail{background:var(--fail-soft);color:var(--fail);border:1.5px solid #fca5a5}
+  .p-na{background:#f1f5f9;color:var(--muted);border:1.5px solid #e2e8f0}
+  .q{min-width:280px;max-width:460px}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:#475569}
+  .note{font-size:12.5px;color:var(--muted);margin-top:12px;line-height:1.6}
+  .load{background:var(--warn-soft);border:2px solid #fcd34d;border-radius:12px;
+        padding:14px 16px;font-size:13.5px;color:#78350f;margin-bottom:22px}
+  .load code{background:#fff;padding:1px 6px;border-radius:5px;font-size:12.5px}
+  .load button{margin-top:10px;font:inherit;font-weight:800;font-size:12.5px;
+               background:#78350f;color:#fff;border:0;border-radius:8px;padding:8px 15px;cursor:pointer}
+  input[type=file]{font:inherit;font-size:12.5px}
+</style>
+</head>
+<body>
+
+<h1>Quantic HR Agent — Evaluation Dashboard</h1>
+<div class="sub">Agentic RAG over Aurora pgvector, reached through MCP tools · evaluation cases</div>
+
+<div id="load" class="load">
+  <strong>No results loaded.</strong> Choose <code>evaluation/results/results.jsonl</code>.
+  The file is read locally — nothing is uploaded.
+  <br><button onclick="demo()">…or load the sample data</button>
+  <br><br><input type="file" id="file" accept=".jsonl,.json,.txt">
+</div>
+
+<div id="content" style="display:none">
+  <div class="grid" id="metrics"></div>
+
+  <section>
+    <h2>Breakdown <span id="scope" class="mono"></span></h2>
+    <div class="chips" id="filters"></div>
+    <div class="charts" id="charts"></div>
+    <div class="note">Click a slice or a legend row to drill down; click again to clear.
+      The metric cards and the table below follow the selection.</div>
+  </section>
+
+  <section>
+    <h2>Per-case results <span id="count" class="mono"></span></h2>
+    <div style="overflow:auto;max-height:70vh"><table id="table"></table></div>
+  </section>
+</div>
+
+<script>
+/* ---------------------------------------------------------------- state */
+let ROWS = [];
+let FILTER = {category:null, behaviour:null, outcome:null, route:null};
+let SORT = {key:"id", dir:1};
+
+const PIE_DEFS = [
+  {id:"category",  title:"By category",     pick:r=>r.category},
+  {id:"behaviour", title:"Behaviour match", pick:r=>behaviour_of(r)},
+  {id:"outcome",   title:"Overall outcome", pick:r=>outcome_of(r)},
+  {id:"route",     title:"Route match",     pick:r=>route_of(r)},
+];
+
+const BEHAVIOUR_LABEL = {
+  answer_no_escalation:"Answered", answer_with_escalation:"Escalated",
+  clarify:"Clarified", refuse:"Refused",
+};
+
+/* --------------------------------------------------------- derivations */
+function behaviour_of(r){
+  if(r.behaviour_ok === null || r.behaviour_ok === undefined) return "n/a";
+  const want = BEHAVIOUR_LABEL[r.expected_behavior] || "other";
+  return r.behaviour_ok ? "Correct — " + want : "Incorrect";
+}
+function route_of(r){
+  if(!r.expected_route) return "n/a";
+  return r.route_ok ? "Correct" : "Incorrect";
+}
+function outcome_of(r){
+  const parts = [];
+  if(r.behaviour_ok === false) parts.push("behaviour");
+  if(r.route_ok === false) parts.push("route");
+  if(r.citation_accuracy === 0) parts.push("citations");
+  if(r.completed === false) parts.push("incomplete");
+  return parts.length ? parts.join(" + ") : "All checks passed";
+}
+function pct(v){ return v === null || v === undefined ? "n/a" : (v*100).toFixed(1) + "%"; }
+
+function mean(key, rows){
+  const v = rows.map(r=>r[key]).filter(x=>x!==null && x!==undefined);
+  return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null;
+}
+function rate(key, rows){
+  const v = rows.map(r=>r[key]).filter(x=>x!==null && x!==undefined).map(Boolean);
+  return v.length ? v.filter(Boolean).length/v.length : null;
+}
+function quantile(rows, p){
+  const v = rows.map(r=>r.latency_ms).filter(x=>x!=null).sort((a,b)=>a-b);
+  if(!v.length) return null;
+  return v[Math.min(v.length-1, Math.max(0, Math.round(p/100*v.length)-1))];
+}
+
+/* ----------------------------------------------------------- selection */
+function selected(){
+  return ROWS.filter(r =>
+    (!FILTER.category  || r.category === FILTER.category) &&
+    (!FILTER.behaviour || behaviour_of(r) === FILTER.behaviour) &&
+    (!FILTER.outcome   || outcome_of(r) === FILTER.outcome) &&
+    (!FILTER.route     || route_of(r) === FILTER.route));
+}
+
+/* -------------------------------------------------------------- render */
+function render(){
+  renderMetrics(); renderFilters(); renderCharts(); renderTable();
+}
+
+function renderMetrics(){
+  const rows = selected();
+  const m = [
+    ["Cases", rows.length, null],
+    ["Citation accuracy", pct(mean("citation_accuracy", rows)), mean("citation_accuracy", rows)],
+    ["Tool selection", pct(mean("tool_selection", rows)), mean("tool_selection", rows)],
+    ["Behaviour accuracy", pct(rate("behaviour_ok", rows)), rate("behaviour_ok", rows)],
+    ["Route accuracy", pct(rate("route_ok", rows)), rate("route_ok", rows)],
+    ["Completion", pct(rate("completed", rows)), rate("completed", rows)],
+    ["Latency p50", quantile(rows,50)==null?"n/a":quantile(rows,50)+"ms", null],
+    ["Latency p95", quantile(rows,95)==null?"n/a":quantile(rows,95)+"ms", null],
+  ];
+  document.getElementById("metrics").innerHTML = m.map(([k,v,frac])=>`
+    <div class="metric"><div class="k">${k}</div><div class="v">${v}</div>
+    ${frac==null?"":`<div class="bar"><i style="width:${Math.round(frac*100)}%"></i></div>`}</div>`).join("");
+  const f = Object.entries(FILTER).filter(([,v])=>v).map(([k,v])=>`${k} = ${v}`);
+  document.getElementById("scope").textContent = f.length ? "· filtered: " + f.join(", ") : "· all cases";
+}
+
+function renderFilters(){
+  const active = Object.entries(FILTER).filter(([,v])=>v);
+  document.getElementById("filters").innerHTML = active.length
+    ? active.map(([k,v])=>`<span class="chip on" onclick="pick('${k}', null)">${k}: ${v} ✕</span>`).join("")
+    : "";
+}
+
+/* --------------------------------------------------------------- theme */
+const PALETTE = {
+  "simple_policy":"#4f46e5","multi_document":"#0891b2","tool_requiring":"#7c3aed",
+  "ambiguous":"#d97706","out_of_scope":"#dc2626",
+  "All checks passed":"#047857","n/a":"#94a3b8",
+  "Correct":"#047857","Incorrect":"#b91c1c",
+  "Answered":"#4f46e5","Escalated":"#0891b2","Clarified":"#d97706","Refused":"#7c3aed",
+};
+const FALLBACK = ["#64748b","#a855f7","#0ea5e9","#f59e0b","#14b8a6","#e11d48"];
+function colour(label, i){ return PALETTE[label] || FALLBACK[i % FALLBACK.length]; }
+
+function counts(pickFn, rows){
+  const map = new Map();
+  for(const r of rows){ const k = pickFn(r); map.set(k, (map.get(k)||0)+1); }
+  return [...map.entries()].sort((a,b)=>b[1]-a[1]);
+}
+
+/* --------------------------------------------------------- pie builder */
+// Takes its key explicitly and keeps no module-level state, so one chart can
+// never write into another's slice markup.
+function buildPie(key, data, total){
+  if(!total) return "";
+  const R = 62, CX = 74, CY = 74, HOLE = 0.55;
+  let angle = -Math.PI/2, out = "";
+  data.forEach(([label, n], i)=>{
+    const span = n/total * Math.PI*2;
+    const x1 = CX + R*Math.cos(angle),      y1 = CY + R*Math.sin(angle);
+    const x2 = CX + R*Math.cos(angle+span), y2 = CY + R*Math.sin(angle+span);
+    const hx1= CX + R*HOLE*Math.cos(angle),      hy1= CY + R*HOLE*Math.sin(angle);
+    const hx2= CX + R*HOLE*Math.cos(angle+span), hy2= CY + R*HOLE*Math.sin(angle+span);
+    const big = span > Math.PI ? 1 : 0;
+    const dim = FILTER[key] && FILTER[key] !== label;
+    out += `<path d="M ${x1} ${y1} A ${R} ${R} 0 ${big} 1 ${x2} ${y2}
+             L ${hx2} ${hy2} A ${R*HOLE} ${R*HOLE} 0 ${big} 0 ${hx1} ${hy1} Z"
+             fill="${colour(label,i)}" stroke="#fff" stroke-width="1.5"
+             opacity="${dim?0.32:1}" style="cursor:pointer"
+             data-k="${key}" data-l="${encodeURIComponent(label)}" class="slice"
+             ><title>${label}: ${n}</title></path>`;
+    angle += span;
+  });
+  return out;
+}
+
+function renderCharts(){
+  document.getElementById("charts").innerHTML = PIE_DEFS.map(({id, title, pick:pickFn})=>{
+    const rows = selected();
+    const data = counts(pickFn, rows);
+    const total = data.reduce((a,[,n])=>a+n, 0);
+    const legend = data.map(([label,n],i)=>`
+      <div class="row ${FILTER[id]===label?'on':''}" data-k="${id}"
+           data-l="${encodeURIComponent(label)}">
+        <span class="swatch" style="background:${colour(label,i)}"></span>
+        <span>${label}</span><span class="n">${n}</span></div>`).join("");
+    return `<div class="chart"><h3>${title}</h3>
+      <div class="pie-wrap">
+        <svg class="pie" width="148" height="148" viewBox="0 0 148 148">
+          ${buildPie(id, data, total)}
+          <text x="74" y="80" text-anchor="middle" font-size="19" font-weight="800"
+                fill="#0f172a">${total}</text>
+        </svg>
+        <div class="legend">${legend || '<span class="mono">no cases</span>'}</div>
+      </div></div>`;
+  }).join("");
+
+  document.querySelectorAll(".slice").forEach(el=>{
+    el.onclick = ()=>pick(el.dataset.k, decodeURIComponent(el.dataset.l));
+  });
+  document.querySelectorAll(".legend .row").forEach(el=>{
+    el.onclick = ()=>pick(el.dataset.k, decodeURIComponent(el.dataset.l));
+  });
+}
+
+// Passing null clears the key; passing the same label twice toggles it off.
+function pick(key, label){
+  FILTER[key] = (label === null || FILTER[key] === label) ? null : label;
+  render();
+}
+
+/* --------------------------------------------------------------- table */
+function renderTable(){
+  const rows = [...selected()].sort((a,b)=>{
+    let x = a[SORT.key], y = b[SORT.key];
+    if(typeof x === "string" || typeof y === "string"){ x = String(x); y = String(y); }
+    if(x === null || x === undefined) x = -1;
+    if(y === null || y === undefined) y = -1;
+    return (x > y ? 1 : x < y ? -1 : 0) * SORT.dir;
+  });
+  const th = (key,label)=>`<th onclick="sortBy('${key}')">${label}${
+    SORT.key===key ? (SORT.dir>0?" up":" down") : ""}</th>`;
+  const body = rows.map(r=>{
+    const beh = r.behaviour_ok === false ? '<span class="pill p-fail">mismatch</span>'
+              : r.behaviour_ok === true  ? '<span class="pill p-pass">ok</span>'
+              : '<span class="pill p-na">n/a</span>';
+    const rt  = !r.expected_route ? '<span class="pill p-na">n/a</span>'
+              : r.route_ok ? '<span class="pill p-pass">ok</span>'
+              : '<span class="pill p-fail">mismatch</span>';
+    const ci  = r.citation_accuracy === null || r.citation_accuracy === undefined
+              ? '<span class="pill p-na">n/a</span>'
+              : r.citation_accuracy >= 0.999 ? '<span class="pill p-pass">1.0</span>'
+              : r.citation_accuracy === 0 ? '<span class="pill p-fail">0.0</span>'
+              : `<span class="pill p-na">${Number(r.citation_accuracy).toFixed(3)}</span>`;
+    const called  = r.tools_called || [];
+    const missing = (r.expected_tools || []).filter(t=>!called.includes(t));
+    return `<tr>
+      <td class="mono">${escape(r.id)}</td>
+      <td class="mono">${escape(r.category)}</td>
+      <td class="q">${escape(r.question || "")}</td>
+      <td>${beh}</td>
+      <td>${rt}</td>
+      <td>${ci}</td>
+      <td class="num">${called.length}</td>
+      <td class="mono">${missing.length ? escape(missing.join(", ")) : "—"}</td>
+      <td class="num">${r.latency_ms == null ? "" : r.latency_ms}</td>
+      <td class="mono">${escape(outcome_of(r))}</td>
+    </tr>`;
+  }).join("");
+  document.getElementById("table").innerHTML = `<thead><tr>
+    ${th("id","ID")} ${th("category","Category")} ${th("question","Question")}
+    ${th("behaviour_ok","Behaviour")} ${th("route_ok","Route")}
+    ${th("citation_accuracy","Citations")} <th>Tools called</th>
+    <th>Missing</th> ${th("latency_ms","ms")} <th>Outcome</th></tr></thead>
+    <tbody>${body}</tbody>`;
+  document.getElementById("count").textContent =
+    "· " + rows.length + " of " + ROWS.length + " cases";
+}
+
+function sortBy(key){
+  SORT = {key, dir: SORT.key === key ? -SORT.dir : (key === "id" || key === "category" ? 1 : -1)};
+  renderTable();
+}
+
+function escape(s){
+  return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",
+    '"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* ---------------------------------------------------------------- load */
+function loadText(text){
+  ROWS = text.split("\n").filter(l=>l.trim()).map(l=>JSON.parse(l));
+  FILTER = {category:null, behaviour:null, outcome:null, route:null};
+  document.getElementById("load").style.display = "none";
+  document.getElementById("content").style.display = "";
+  render();
+}
+
+document.getElementById("file").addEventListener("change", e=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const rd = new FileReader();
+  rd.onload = () => loadText(rd.result);
+  rd.readAsText(f);
+});
+
+function demo(){
+  const rows = window.SAMPLE || [];
+  if(!rows.length){ alert("Sample data missing."); return; }
+  loadText(rows.map(r=>JSON.stringify(r)).join("\n"));
+}
+</script>
+
+<script id="sample" type="application/json">[{"id":"Q01","category":"simple_policy","employee_id":"E1007","question":"How many days of paid vacation do full-time employees accrue each year?","citation_accuracy":1.0,"tool_selection":1.0,"expected_route":null,"expected_behavior":"answer_no_escalation","route_ok":null,"behaviour_ok":true,"completed":true,"expected_tools":["search_policy_documents"],"tools_called":["search_policy_documents"],"latency_ms":6358,"escalation":false,"route":null,"tools_n":2},{"id":"Q02","category":"simple_policy","employee_id":"E1007","question":"How many paid holidays does the company observe?","citation_accuracy":0.0,"tool_selection":0.0,"expected_route":null,"expected_behavior":"answer_no_escalation","route_ok":null,"behaviour_ok":true,"completed":true,"expected_tools":["search_policy_documents"],"tools_called":["search_policy_documents"],"latency_ms":6456,"escalation":false,"route":null,"tools_n":2},{"id":"Q03","category":"simple_policy","employee_id":"E1007","question":"What is the one-time home office stipend?","citation_accuracy":1.0,"tool_selection":1.0,"expected_route":null,"expected_behavior":"answer_no_escalation","route_ok":null,"behaviour_ok":true,"completed":true,"expected_tools":["search_policy_documents"],"tools_called":["search_policy_documents"],"latency_ms":5916,"escalation":false,"route":null,"tools_n":2},{"id":"Q04","category":"simple_policy","employee_id":"E1007","question":"How often are company laptops replaced?","citation_accuracy":1.0,"tool_selection":1.0,"expected_route":null,"expected_behavior":"answer_no_escalation","route_ok":null,"behaviour_ok":true,"completed":true,"expected_tools":["search_policy_documents"],"tools_called":["search_policy_documents"],"latency_ms":4801,"escalation":false,"route":null,"tools_n":1},{"id":"Q05","category":"simple_policy","employee_id":"E1007","question":"What is the expense amount that requires manager approval in advance?","citation_accuracy":1.0,"tool_selection":1.0,"expected_route":null,"expected_behavior":"answer_no_escalation","route_ok":null,"behaviour_ok":true,"completed":true,"expected_tools":["search_policy_documents"],"tools_called":["search_policy_documents"],"latency_ms":10192,"escalation":false,"route":null,"tools_n":6},{"id":"Q06","category":"simple_policy","employee_id":"E1007","question":"How long is paid parental leave?","citation_accuracy":1.0,"tool_selection":1.0,"expected_route":null,"expected_behavior":"answer_no_escalation","route_ok":null,"behaviour_ok":true,"completed":true,"expected_tools":["search_policy_documents"],"tools_called":["search_policy_documents"],"latency_ms":5278,"escalation":false,"route":null,"tools_n":1},{"id":"Q07","category":"simple_policy","employee_id":"E1007","question":"How much notice is needed for a vacation request?","citation_accuracy":1.0,"tool_selection":1.0,"expected_route":null,"expected_behavior":"answer_no_escalation","route_ok":null,"behaviour_ok":true,"completed":true,"expected_tools":["search_policy_documents"],"tools_called":["search_policy_documents"],"latency_ms":5785,"escalation":false,"route":null,"tools_n":2},{"id":"Q08","category":"simple_policy","employee_id":"E1007","question":"May I paste employee records into a public AI assistant?","citation_accuracy":1.0,"tool_selection":1.0,"expected_route":null,"expected_behavior":"answer_no_escalation","route_ok":null,"behaviour_ok":true,"completed":true,"expected_tools":["search_policy_documents"],"tools_called":["search_policy_documents"],"latency_ms":7275,"escalation":false,"route":null,"tools_n":2},{"id":"Q09","category":"multi_document","employee_id":"E1007","question":"Can I work from Portugal for six weeks?","citation_accuracy":1.0,"tool_selection":1.0,"expected_route":"PEOPLE_OPS_AND_LEGAL","expected_behavior":"answer_with_escalation","route_ok":true,"behaviour_ok":true,"completed":true,"expected_tools":["search_policy_documents","lookup_employee_profile","check_policy_compliance"],"tools_called":["search_policy_documents","lookup_employee_profile","check_policy_compliance"],"latency_ms":7392,"escalation":true,"route":"PEOPLE_OPS_AND_LEGAL","tools_n":3},{"id":"Q10","category":"multi_document","employee_id":"E1007","question":"What happens if I want to work abroad for 120 days?","citation_accuracy":1.0,"tool_selection":1.0,"expected_route":"DECLINED","expected_behavior":"answer_with_escalation","route_ok":true,"behaviour_ok":true,"completed":true,"expected_tools":["search_policy_documents","check_policy_compliance"],"tools_called":["search_policy_documents","lookup_employee_profile","check_policy_compliance","draft_hr_email","search_policy_documents"],"latency_ms":10328,"escalation":true,"route":"DECLINED","tools_n":5},{"id":"Q11","category":"multi_document","employee_id":"E1004","question":"I am a contractor. What benefits am I eligible for?","citation_accuracy":0.0,"tool_selection":1.0,"expected_route":"NOT_ELIGIBLE","expected_behavior":"answer_no_escalation","route_ok":true,"behaviour_ok":true,"completed":true,"expected_tools":["lookup_benefits_status"],"tools_called":["lookup_benefits_status"],"latency_ms":3750,"escalation":false,"route":"NOT_ELIGIBLE","tools_n":1},{"id":"Q12","category":"multi_document","employee_id":"E1007","question":"What security rules apply when I work from a cafe?","citation_accuracy":0.5,"tool_selection":1.0,"expected_route":null,"expected_behavior":"answer_no_escalation","route_ok":null,"behaviour_ok":true,"completed":true,"expected_tools":["search_policy_documents"],"tools_called":["search_policy_documents","get_policy_section"],"latency_ms":5803,"escalation":false,"route":null,"tools_n":2},{"id":"Q13","category":"multi_document","employee_id":"E1007","question":"Can I carry over 10 unused vacation days into next year?","citation_accuracy":1.0,"tool_selection":1.0,"expected_route":"INSUFFICIENT","expected_behavior":"answer_no_escalation","route_ok":true,"behaviour_ok":true,"completed":true,"expected_tools":["search_policy_documents"],"tools_called":["search_policy_documents","check_policy_compliance"],"latency_ms":7547,"escalation":false,"route":"INSUFFICIENT","tools_n":3},{"id":"Q14","category":"tool_requiring","employee_id":"E1012","question":"Can I take 3 days of PTO next week?","citation_accuracy":1.0,"tool_selection":1.0,"expected_route":"MANAGER_APPROVAL","expected_behavior":"answer_no_escalation","route_ok":false,"behaviour_ok":true,"completed":true,"expected_tools":["check_pto_balance","check_policy_compliance"],"tools_called":["check_pto_balance","check_policy_compliance","search_policy_documents"],"latency_ms":8210,"escalation":false,"route":"MANAGER_APPROVAL","tools_n":4},{"id":"Q15","category":"tool_requiring","employee_id":"E1019","question":"Can I take 3 days of PTO next week?","citation_accuracy":0.0,"tool_selection":1.0,"expected_route":"INSUFFICIENT","expected_behavior":"answer_no_escalation","route_ok":true,"behaviour_ok":true,"completed":true,"expected_tools":["check_pto_balance","search_policy_documents"],"tools_called":["check_pto_balance"],"latency_ms":3570,"escalation":false,"route":"INSUFFICIENT","tools_n":1},{"id":"Q16","category":"tool_requiring","employee_id":"E1007","question":"I want to buy a laptop for $2000, what does the policy say?","citation_accuracy":0.0,"tool_selection":0.0,"expected_route":null,"expected_behavior":"answer_no_escalation","route_ok":null,"behaviour_ok":true,"completed":true,"expected_tools":["check_policy_compliance","search_policy_documents"],"tools_called":["search_policy_documents"],"latency_ms":5186,"escalation":false,"route":null,"tools_n":1},{"id":"Q17","category":"tool_requiring","employee_id":"E1007","question":"What if the laptop were $500 instead?","citation_accuracy":1.0,"tool_selection":1.0,"expected_route":"CLAIM_WITH_RECEIPT","expected_behavior":"answer_no_escalation","route_ok":true,"behaviour_ok":true,"completed":true,"expected_tools":["check_policy_compliance"],"tools_called":["check_policy_compliance"],"latency_ms":6053,"escalation":false,"route":"CLAIM_WITH_RECEIPT","tools_n":2},{"id":"Q18","category":"tool_requiring","employee_id":"E1024","question":"Can I work from Denver for a month?","citation_accuracy":1.0,"tool_selection":1.0,"expected_route":"INELIGIBLE","expected_behavior":"answer_no_escalation","route_ok":true,"behaviour_ok":true,"completed":true,"expected_tools":["lookup_employee_profile","check_policy_compliance"],"tools_called":["lookup_employee_profile","check_policy_compliance"],"latency_ms":6526,"escalation":false,"route":"INELIGIBLE","tools_n":3},{"id":"Q19","category":"tool_requiring","employee_id":"E1015","question":"What is my PTO balance?","citation_accuracy":0.0,"tool_selection":1.0,"expected_route":null,"expected_behavior":"answer_no_escalation","route_ok":null,"behaviour_ok":true,"completed":true,"expected_tools":["check_pto_balance","search_policy_documents"],"tools_called":["check_pto_balance"],"latency_ms":3950,"escalation":false,"route":null,"tools_n":1},{"id":"Q20","category":"ambiguous","employee_id":"E1007","question":"Can I take some time off?","citation_accuracy":null,"tool_selection":0.0,"expected_route":"INSUFFICIENT","expected_behavior":"clarify","route_ok":false,"behaviour_ok":true,"completed":true,"expected_tools":[],"tools_called":[],"latency_ms":7719,"escalation":false,"route":"INSUFFICIENT","tools_n":3},{"id":"Q21","category":"ambiguous","employee_id":"E1007","question":"What is the policy on working abroad?","citation_accuracy":0.333,"tool_selection":1.0,"expected_route":"MANAGER_APPROVAL","expected_behavior":"answer_no_escalation","route_ok":true,"behaviour_ok":true,"completed":true,"expected_tools":["search_policy_documents"],"tools_called":["search_policy_documents","get_policy_section","check_policy_compliance"],"latency_ms":8151,"escalation":false,"route":"MANAGER_APPROVAL","tools_n":4},{"id":"Q22","category":"ambiguous","employee_id":"E1007","question":"I need to be away for a while, is that ok?","citation_accuracy":null,"tool_selection":0.0,"expected_route":"INSUFFICIENT","expected_behavior":"clarify","route_ok":false,"behaviour_ok":true,"completed":true,"expected_tools":[],"tools_called":[],"latency_ms":10675,"escalation":false,"route":"INSUFFICIENT","tools_n":5},{"id":"Q23","category":"out_of_scope","employee_id":"E1007","question":"What is the CEO salary?","citation_accuracy":null,"tool_selection":0.0,"expected_route":null,"expected_behavior":"refuse","route_ok":null,"behaviour_ok":true,"completed":true,"expected_tools":[],"tools_called":[],"latency_ms":2209,"escalation":false,"route":null,"tools_n":0},{"id":"Q24","category":"out_of_scope","employee_id":"E1007","question":"Can you explain US federal tax law?","citation_accuracy":null,"tool_selection":0.0,"expected_route":null,"expected_behavior":"refuse","route_ok":null,"behaviour_ok":true,"completed":true,"expected_tools":[],"tools_called":[],"latency_ms":1892,"escalation":false,"route":null,"tools_n":0},{"id":"Q25","category":"out_of_scope","employee_id":"E1007","question":"Am I eligible for a company car?","citation_accuracy":null,"tool_selection":0.333,"expected_route":null,"expected_behavior":"refuse","route_ok":null,"behaviour_ok":true,"completed":true,"expected_tools":[],"tools_called":[],"latency_ms":4759,"escalation":false,"route":null,"tools_n":1}]</script>
+<script>
+  window.SAMPLE = JSON.parse(document.getElementById("sample").textContent);
+  demo();
+</script>
+</body>
+</html>
