@@ -14,6 +14,11 @@ The durable record of a single prompt is in agent_runs, keyed by prompt_id.
 A warm-up runs at startup because the cluster auto-pauses after 300 seconds of
 idle. Without it, the first question after a pause fails while the cluster
 resumes, which reads as an application fault rather than a cold start.
+
+The built React UI is served from /app/static. /assets is mounted as a directory
+and / returns index.html through an explicit route. An earlier version mounted
+StaticFiles at "/" behind a helper that returned None when it could not find
+index.html, which produced a bare 404 on every UI path with no explanation.
 """
 from __future__ import annotations
 
@@ -21,31 +26,30 @@ import os
 import time
 import uuid
 from collections import defaultdict, deque
-from fastapi import HTTPException, Path
-from fastapi.responses import FileResponse, HTMLResponse
-from fastapi import FastAPI
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from quantic_hr import db
 from quantic_hr.agent import DEFAULT_EMPLOYEE_ID, run_agent
 from quantic_hr.db import execute, query_one
+from quantic_hr.guardrails import REFUSAL_TEXT, is_out_of_corpus, needs_clarification
 from quantic_hr.prompt_log import new_prompt_id, persist_prompt
-from quantic_hr.guardrails import needs_clarification, is_out_of_corpus, REFUSAL_TEXT
-
 
 MAX_TURNS = 6          # retained per thread, for display
 CONTEXT_TURNS = 2      # passed to the planner, for follow-ups
 WARMUP_ATTEMPTS = 6
 WARMUP_DELAY = 10
 
-
 app = FastAPI(title="Quantic HR BFF", version="0.7.0")
 
+from quantic_hr.evaluation import ROOT as REPO_ROOT, load_results  # noqa: E402
 
-from quantic_hr.evaluation import ROOT as REPO_ROOT, load_results
 DASHBOARD_HTML = REPO_ROOT / "web" / "evaluation_dashboard.html"
-
 
 _origins = os.environ.get(
     "ALLOWED_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173"
@@ -70,8 +74,10 @@ def warm_database() -> None:
             return
         print(f"cluster not ready (attempt {attempt}): {result.get('error')}")
         time.sleep(WARMUP_DELAY)
-    print(f"cluster did not wake after {WARMUP_ATTEMPTS} attempts; "
-          "the first question may fail and should be retried.")
+    print(
+        f"cluster did not wake after {WARMUP_ATTEMPTS} attempts; "
+        "the first question may fail and should be retried."
+    )
 
 
 class ChatRequest(BaseModel):
@@ -91,19 +97,12 @@ def health() -> dict:
         "threads_in_session": len(THREADS),
     }
 
-@app.get("/evaluation/results")
-def evaluation_results() -> dict:
-    """Latest evaluation run, for the dashboard. No caching, always current."""
-    return load_results()
 
-
-@app.get("/evaluation", response_class=HTMLResponse)
-def evaluation_dashboard() -> HTMLResponse:
-    """The evaluation dashboard, reading from the results endpoint."""
-    page = DASHBOARD_HTML
-    if not page.exists():
-        raise HTTPException(status_code=404, detail="dashboard file not found")
-    return HTMLResponse(page.read_text(encoding="utf-8"))
+@app.get("/ping")
+def ping() -> dict:
+    """Render liveness probe. Touches neither the database nor Bedrock, so the
+    auto-paused Aurora cluster is never woken by a health check."""
+    return {"status": "Healthy"}
 
 
 @app.get("/employees")
@@ -124,11 +123,22 @@ def list_employees() -> dict:
     )
     return {"employees": rows}
 
-@app.get("/ping")
-def ping() -> dict:
-    """Render liveness probe. Touches neither the database nor Bedrock."""
-    return {"status": "Healthy"}
 
+@app.get("/evaluation/results")
+def evaluation_results() -> dict:
+    """Latest evaluation run, for the dashboard. No caching, always current."""
+    return load_results()
+
+
+@app.get("/evaluation")
+def evaluation_dashboard() -> FileResponse:
+    """The evaluation dashboard, reading from the results endpoint."""
+    page = DASHBOARD_HTML
+    if not page.is_file():
+        raise HTTPException(
+            status_code=404, detail=f"dashboard file not found at {page}"
+        )
+    return FileResponse(page)
 
 
 @app.get("/threads")
@@ -145,18 +155,13 @@ def list_threads() -> dict:
             "last_question": turns[-1].get("question", ""),
             "employee_id": turns[-1].get("employee_id"),
         })
-    # The deque preserves insertion order, so reverse it for newest-first.
     out.reverse()
     return {"threads": out, "count": len(out)}
 
 
 @app.get("/thread/{thread_id}")
 def get_thread(thread_id: str) -> dict:
-    """Full turns for one session thread, oldest first.
-
-    Each turn is the object stored by /chat, so it already carries question,
-    answer, steps, tool_trace, citations and escalation. Nothing is remapped.
-    """
+    """Full turns for one session thread, oldest first."""
     turns = list(THREADS.get(thread_id, []))
     return {"thread_id": thread_id, "turns": turns, "count": len(turns)}
 
@@ -243,6 +248,27 @@ def chat(request: ChatRequest) -> dict:
     }
     THREADS[thread_id].append(turn)
     persist_prompt(prompt_id, request.employee_id, request.message, turn, latency_ms)
-    print(f"static mount: dir={os.environ.get('QUANTIC_STATIC_DIR')!r} resolved={_ui}")
     return turn
 
+
+# ------------------------------------------------------------------ UI files
+# Registered last, so nothing above is shadowed. /assets is a directory mount
+# because Vite emits hashed bundles there; / is an explicit route rather than a
+# catch-all mount, so a missing index.html produces a message naming the path.
+_STATIC = Path(os.environ.get("QUANTIC_STATIC_DIR") or "/app/static")
+_ASSETS = _STATIC / "assets"
+
+if _ASSETS.is_dir():
+    app.mount("/assets", StaticFiles(directory=str(_ASSETS)), name="assets")
+    print(f"UI assets mounted from {_ASSETS}")
+else:
+    print(f"WARNING: no assets directory at {_ASSETS}; the UI will not render")
+
+
+@app.get("/", include_in_schema=False)
+def ui_root() -> FileResponse:
+    """Serve the built React entry point."""
+    index = _STATIC / "index.html"
+    if not index.is_file():
+        raise HTTPException(status_code=404, detail=f"UI missing at {index}")
+    return FileResponse(index)
