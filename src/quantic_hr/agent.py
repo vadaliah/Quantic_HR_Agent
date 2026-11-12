@@ -42,7 +42,8 @@ Rules:
 - Cite every policy statement as [document_id section_id], for example [POL-001 2.1].
 - draft_hr_email only drafts; never say an email was sent or a record was changed.
 - If the tools return nothing relevant, reply exactly: {ABSTAIN_MESSAGE}
-Be brief: a short answer, then the key conditions or next step."""
+- Do not include reasoning, planning or thinking tags in your answer. Reply
+  with the answer only, Be brief: a short answer, then the key conditions or next step."""
 
 
 class AgentState(TypedDict, total=False):
@@ -243,6 +244,17 @@ def _collect(traces: list[dict[str, Any]]) -> tuple[list[dict[str, str]], list[s
     return citations, snippets
 
 
+import re
+
+_THINK = re.compile(r"<thinking>.*?</thinking>", re.S | re.I)
+
+
+def _clean(text: str) -> str:
+    """Drop the model's reasoning tags. The trace carries the operational
+    steps; the answer carries only the answer."""
+    return _THINK.sub("", text or "").strip()
+
+
 def converse_node(state: AgentState) -> AgentState:
     try:
         text, traces = asyncio.run(_converse_loop(state["message"], state["employee_id"]))
@@ -257,7 +269,7 @@ def converse_node(state: AgentState) -> AgentState:
         "tool_trace": traces,
         "citations": [] if abstained else citations,
         "snippets": [] if abstained else snippets,
-        "answer": ABSTAIN_MESSAGE if abstained else text,
+        "answer": ABSTAIN_MESSAGE if abstained else _clean(text),
         "abstained": abstained,
     }
 
