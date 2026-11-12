@@ -124,6 +124,12 @@ def list_employees() -> dict:
     )
     return {"employees": rows}
 
+@app.get("/ping")
+def ping() -> dict:
+    """Render liveness probe. Touches neither the database nor Bedrock."""
+    return {"status": "Healthy"}
+
+
 
 @app.get("/threads")
 def list_threads() -> dict:
