@@ -243,5 +243,6 @@ def chat(request: ChatRequest) -> dict:
     }
     THREADS[thread_id].append(turn)
     persist_prompt(prompt_id, request.employee_id, request.message, turn, latency_ms)
+    print(f"static mount: dir={os.environ.get('QUANTIC_STATIC_DIR')!r} resolved={_ui}")
     return turn
 
