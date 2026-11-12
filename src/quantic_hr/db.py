@@ -92,6 +92,25 @@ def _row(fields: list[dict], columns: list[str]) -> dict[str, Any]:
             out[name] = field.get("stringValue")
     return out
 
+def _as_date(value: Any) -> Any:
+    """Coerce an ISO date string to datetime.date.
+
+    The Data API returns every scalar as JSON, so a date column arrives as
+    "2026-11-03". psycopg returns datetime.date, and tools.py calls
+    .isoformat() on it, so the two paths must agree.
+    """
+    if not isinstance(value, str):
+        return value
+    import datetime as _dt
+
+    for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
+        try:
+            parsed = _dt.datetime.strptime(value, fmt)
+            return parsed.date() if fmt == "%Y-%m-%d" else parsed
+        except ValueError:
+            continue
+    return value
+
 
 def to_named_sql(sql: str) -> str:
     """Rewrite psycopg-style %s placeholders as the Data API's :p1, :p2.

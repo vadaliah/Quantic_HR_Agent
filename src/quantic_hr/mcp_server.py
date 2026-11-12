@@ -9,6 +9,9 @@ from mcp.server.fastmcp import FastMCP
 from quantic_hr import tools
 
 mcp = FastMCP("quantic-hr")
+import os, sys
+print("mcp env:", {k: bool(os.environ.get(k)) for k in
+      ("CLUSTER_ARN", "SECRET_ARN", "AWS_ACCESS_KEY_ID")}, file=sys.stderr)
 
 
 @mcp.tool()
