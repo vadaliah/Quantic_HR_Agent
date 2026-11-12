@@ -213,10 +213,47 @@ def check_policy_compliance(
     requested_hours: float = 0,
     destination_region: str | None = None,
     requested_days: float = 0,
+    amount: float = 0,
 ) -> dict[str, Any]:
     profile = lookup_employee_profile(employee_id)
     if not profile.get("found"):
         return {"compliant": False, "reason": "unknown employee", "employee_id": employee_id}
+    if check_type in {"expense", "office_furniture", "equipment"}:
+        # Deterministic amount comparison. The model must not read a threshold
+        # out of prose: a section titled "What is not reimbursed" describes
+        # exclusions, and applying it to a figure below the limit inverts the
+        # rule. The stipend is enforced here instead.
+        stipend = 500.0
+        amount = float(amount or 0)
+        if amount <= stipend:
+            return {
+                "compliant": True,
+                "check_type": check_type,
+                "employee_id": employee_id,
+                "amount": amount,
+                "stipend": stipend,
+                "route": "CLAIM_WITH_RECEIPT",
+                "reason": (
+                    f"${amount:.0f} is within the ${stipend:.0f} one-time home office "
+                    "stipend. Submit the receipt within 30 days."
+                ),
+                "policy_document_id": "POL-005",
+                "policy_section_id": "2.1",
+            }
+        return {
+            "compliant": False,
+            "check_type": check_type,
+            "employee_id": employee_id,
+            "amount": amount,
+            "stipend": stipend,
+            "route": "NEEDS_PRE_APPROVAL",
+            "reason": (
+                f"${amount:.0f} exceeds the ${stipend:.0f} one-time home office "
+                "stipend, so it needs manager pre-approval."
+            ),
+            "policy_document_id": "POL-005",
+            "policy_section_id": "2.1",
+        }
 
     if check_type == "remote_work":
         eligible = bool(profile["remote_eligible"]) and not profile.get("designated_onsite_role")
