@@ -13,7 +13,7 @@
 !frontend/package-lock.json
 !frontend/index.html
 !frontend/vite.config.js
-!frontend/src
+!frontend/src/**
 **/__pycache__
 **/*.pyc
 **/*.egg-info
