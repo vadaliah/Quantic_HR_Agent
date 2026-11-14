@@ -35,8 +35,35 @@ MAX_TOOL_ROUNDS = 6
 # A retrieval hit only has to clear the search floor to be useful to the model.
 # What is DISPLAYED as evidence needs a stricter bar: a weak match presented as
 # a citation invites the reader to trust something the corpus almost supports.
-CITATION_MIN_SCORE = 0.35
+# One floor, shared with retrieval. Anything the model may read, the reader may
+# see. There used to be two: retrieval at 0.2 and display at 0.35, which meant a
+# passage in that band could support the answer while the citation panel showed
+# nothing -- an answer grounded in text the reader was told did not exist.
+#
+# The 0.35 was set when the corpus was 17 pages. Cosine scores compress as a
+# corpus grows, so the same passage that scored 0.42 among 187 chunks scores 0.31
+# among 229. The constant did not become wrong; the corpus moved.
+#
+# The reader is protected instead by CITATION_LIMIT and by strongest-first
+# ordering, not by hiding what was used.
+CITATION_MIN_SCORE = float(os.environ.get("QUANTIC_MIN_SIMILARITY", "0.2"))
 CITATION_LIMIT = 3
+
+UNAVAILABLE_MESSAGE = (
+    "The HR database is waking up after being idle, so I could not check the "
+    "policies just now. Please ask again in about a minute."
+)
+
+
+def _all_tools_failed(traces: list[dict[str, Any]]) -> bool:
+    """True when tools were called and every one errored.
+
+    An outage is not an absence of policy. Answering "I could not find this in
+    the policies" after every lookup failed misreports an infrastructure fault
+    as a content finding.
+    """
+    return bool(traces) and all(t.get("is_error") for t in traces)
+
 
 ABSTAIN_MESSAGE = (
     "I could not find this in the Acme Corp HR policies or your HR records, so I will not guess. "
@@ -48,12 +75,13 @@ Rules:
 - Search the policy corpus before answering any policy question.
 - The employee_id is fixed by the session; do not ask for or use another one.
 - Cite every policy statement as [document_id section_id], for example [POL-001 2.1].
+- For any PTO, expense or remote-work decision call check_policy_compliance and
+  state its comparison, route and reason. Never compare amounts or days yourself.
+- If check_policy_compliance returns checked=false, say the rule could not be
+  applied and why; never present that as a "no".
+- create_mock_hr_ticket: call with confirm=false, show the preview, and only call
+  confirm=true after the user says yes.
 - draft_hr_email only drafts; never say an email was sent or a record was changed.
-- Never compare a figure the user names against a figure in a policy passage
-  yourself. If the question contains an amount, a day count or a duration,
-  call check_policy_compliance and use its result.
-- A section titled "What is not reimbursed" describes exclusions. Do not use it
-  to decide whether something IS reimbursable.
 - If the tools return nothing relevant, reply exactly: {ABSTAIN_MESSAGE}
 - Do not include reasoning, planning or thinking tags in your answer. Reply
   with the answer only, Be brief: a short answer, then the key conditions or next step."""
@@ -146,6 +174,8 @@ def _citations_from(result: Any) -> list[dict[str, Any]]:
         if isinstance(matches, list):
             for match in matches:
                 score = match.get("score")
+                # Same floor the retriever used. A passage below it never reached
+                # the model, so nothing is hidden here that was not hidden there.
                 if score is not None and float(score) < CITATION_MIN_SCORE:
                     continue
                 citations.append({
@@ -184,10 +214,7 @@ def _collect(traces: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if cite["document_id"] and key not in seen:
                 seen.add(key)
                 citations.append(cite)
-    citations.sort(
-        key=lambda c: (c.get("score") is not None, float(c.get("score") or 0)),
-        reverse=True,
-    )
+    citations.sort(key=lambda c: float(c.get("score") or 0), reverse=True)
     return citations[:CITATION_LIMIT]
 
 
@@ -337,6 +364,19 @@ def converse_node(state: AgentState) -> AgentState:
         )
     except bedrock.BedrockUnavailable as exc:
         return {**state, "fallback_reason": str(exc)}
+    if _all_tools_failed(traces):
+        return {
+            **state,
+            "mode": "bedrock",
+            "model": bedrock.chat_model_id(),
+            "tool_trace": traces,
+            "steps": _steps_from(traces),
+            "citations": [],
+            "snippets": [],
+            "answer": UNAVAILABLE_MESSAGE,
+            "abstained": False,
+            "unavailable": True,
+        }
     citations = _collect(traces)
     abstained = not citations or not text or ABSTAIN_MESSAGE in text
     return {
