@@ -79,6 +79,11 @@ Rules:
   state its comparison, route and reason. Never compare amounts or days yourself.
 - If check_policy_compliance returns checked=false, say the rule could not be
   applied and why; never present that as a "no".
+- When a tool returns `route`, `comparison` or `available_formula`, report those
+  values as the tool gave them. Do not restate them in your own words and do not
+  add a condition the tool did not return: if the tool returned
+  INSUFFICIENT_BALANCE, the request fails on the balance and manager approval is
+  not the answer, even where the request is long enough to need it.
 - create_mock_hr_ticket: call with confirm=false, show the preview, and only call
   confirm=true after the user says yes.
 - draft_hr_email only drafts; never say an email was sent or a record was changed.

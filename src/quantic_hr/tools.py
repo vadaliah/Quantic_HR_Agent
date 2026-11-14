@@ -64,8 +64,29 @@ def check_pto_balance(employee_id: str) -> dict[str, Any]:
             result[key] = value.isoformat() if hasattr(value, "isoformat") else value
         else:
             result[key] = float(value)
+
+    # Show the arithmetic. accrued_days is a GROSS figure and available_days is
+    # the CLOSING balance, so placed side by side they read as if one should
+    # equal the other plus carryover. A reader who adds them gets a number that
+    # does not match, and cannot see why. The formula removes the inference.
+    accrued = result.get("accrued_days") or 0.0
+    carry = result.get("carryover_days") or 0.0
+    taken = result.get("taken_days_this_year") or 0.0
+    pending = result.get("pending_days") or 0.0
+    result["available_formula"] = (
+        f"{accrued:.2f} + {carry:.2f} - {taken:.2f} - {pending:.2f} = "
+        f"{result.get('available_days', 0.0):.2f}"
+    )
+    result["available_note"] = (
+        "available_days is the closing balance: accrued plus carryover, less "
+        "taken and pending. It is not the sum of accrued and carryover."
+    )
+    # The balance rule is POL-001 2.1; the formula is worked in POL-001A A.1.
+    # Citing 3.1 (notice and approval) for a balance claim does not support it.
     result["policy_document_id"] = "POL-001"
     result["policy_section_id"] = "2.1"
+    result["policy_annex_document_id"] = "POL-001A"
+    result["policy_annex_section_id"] = "A.1"
     return result
 
 
@@ -207,159 +228,265 @@ def get_policy_section(document_id: str, section_id: str) -> dict[str, Any]:
     return {"found": True, **row}
 
 
-# ------------------------------------------------------------- policy limits
-def _limit_from_corpus(document_id: str, section_id: str) -> float | None:
-    """Read a dollar limit out of the policy text rather than asserting it.
+# ------------------------------------------------------------- policy rules
+# Design: a rule engine, not a chain of ifs.
+#
+#   * Limits are DATA (mock_data/policy_rules.json), each keyed to the section
+#     that states it, so a verdict always cites the text it came from.
+#   * Each check type is one function registered in CHECKS. The MCP schema
+#     lists exactly these names, so the model cannot invent a check type.
+#   * Every result has the same shape (Verdict). A check that did not run
+#     returns checked=False and compliant=None -- never False. Returning
+#     False for "I could not check" is what made the model answer that a $400
+#     chair broke a $500 limit.
+#   * Arithmetic happens here and is shown in the result ("400.00 <= 500.00"),
+#     so the model reports a computed comparison instead of reasoning over prose.
+import json
+from functools import lru_cache
+from pathlib import Path
 
-    Hardcoding the home office stipend would silently disagree with POL-005 the
-    moment the corpus is edited, and nothing would catch it. Reading the figure
-    keeps one source of truth: the citation the answer gives is the same text
-    the comparison came from.
+RULES_PATH = Path(__file__).resolve().parents[2] / "mock_data" / "policy_rules.json"
 
-    Returns None when no figure can be read, so the caller reports that rather
-    than inventing a threshold.
-    """
-    section = get_policy_section(document_id, section_id)
-    if not section.get("found"):
+
+@lru_cache(maxsize=1)
+def policy_rules() -> dict[str, Any]:
+    return json.loads(RULES_PATH.read_text())
+
+
+def _verdict(
+    check_type: str,
+    *,
+    checked: bool,
+    compliant: bool | None,
+    route: str,
+    reason: str,
+    document_id: str | None = None,
+    section_id: str | None = None,
+    **facts: Any,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "check_type": check_type,
+        "checked": checked,
+        "compliant": compliant,
+        "route": route,
+        "reason": reason,
+        **facts,
+    }
+    if document_id:
+        out["policy_document_id"] = document_id
+        out["policy_section_id"] = section_id
+    return out
+
+
+def _not_checked(check_type: str, reason: str, **facts: Any) -> dict[str, Any]:
+    return _verdict(
+        check_type, checked=False, compliant=None, route="CANNOT_DETERMINE",
+        reason=reason, supported_check_types=sorted(CHECKS), **facts,
+    )
+
+
+def resolve_expense_category(name: str | None) -> str | None:
+    """Map what the user bought ("chair", "hotel") to a rule category."""
+    if not name:
         return None
-    text = str(section.get("content") or "")
-    # POL-005 2.1 words the rule as a "one-time ... stipend of $500". Anchoring
-    # on the phrase avoids picking up an unrelated figure elsewhere in the
-    # section, which a bare "$" match would.
-    match = re.search(r"one-time[^$]{0,60}\$\s?([\d,]+(?:\.\d{2})?)", text, re.I)
-    if not match:
-        match = re.search(r"\$\s?([\d,]+(?:\.\d{2})?)", text)
-    if not match:
-        return None
-    try:
-        return float(match.group(1).replace(",", ""))
-    except ValueError:
-        return None
+    key = name.strip().lower().replace(" ", "_").replace("-", "_")
+    categories = policy_rules()["expense_categories"]
+    if key in categories:
+        return key
+    for category, rule in categories.items():
+        if key in rule["aliases"] or any(alias in key for alias in rule["aliases"]):
+            return category
+    return None
 
 
-# The model names an expense check in several ways, and an unrecognised name
-# used to produce "unsupported check_type", which left the comparison to be
-# reasoned from prose. Amount questions now get the deterministic branch
-# whatever label arrives.
-EXPENSE_CHECK_TYPES = {
-    "expense", "expenses", "reimbursement", "reimbursable", "office_furniture",
-    "furniture", "equipment", "home_office", "stipend", "purchase",
-}
+def _check_expense(profile: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+    category = resolve_expense_category(args.get("expense_category"))
+    if category is None:
+        return _not_checked(
+            "expense",
+            f"no expense rule for category {args.get('expense_category')!r}",
+            known_categories=sorted(policy_rules()["expense_categories"]),
+        )
+    amount = args.get("amount")
+    if amount is None or float(amount) <= 0:
+        return _not_checked("expense", "amount (USD) is required to compare against the limit")
+    amount = float(amount)
+    rule = policy_rules()["expense_categories"][category]
+    glob = policy_rules()["expense_global"]
+    limit = float(rule["limit_usd"])
+
+    needed_model = rule.get("requires_work_model")
+    if needed_model and profile.get("work_model") != needed_model:
+        return _verdict(
+            "expense", checked=True, compliant=False, route="NOT_ELIGIBLE",
+            reason=f"{rule['description']} applies only to {needed_model} employees",
+            document_id=rule["document_id"], section_id=rule["section_id"],
+            category=category, amount_usd=amount, limit_usd=limit,
+        )
+
+    within = amount <= limit
+    comparison = f"{amount:.2f} {'<=' if within else '>'} {limit:.2f}"
+    receipt = amount >= glob["receipt_required_from_usd"]
+    if within:
+        route, reason = "CLAIM_WITH_RECEIPT" if receipt else "CLAIM", (
+            f"${amount:,.2f} is within the ${limit:,.0f} {rule['limit_kind'].replace('_', ' ')} "
+            f"limit for {rule['description'].lower()}, so it is reimbursable"
+        )
+    elif amount > glob["pre_approval_above_usd"]:
+        route, reason = "NEEDS_PRE_APPROVAL", (
+            f"${amount:,.2f} exceeds the ${limit:,.0f} limit and the "
+            f"${glob['pre_approval_above_usd']:,} pre-approval threshold; only up to "
+            f"${limit:,.0f} is reimbursable without manager pre-approval"
+        )
+    else:
+        route, reason = "PARTIAL_UP_TO_LIMIT", (
+            f"${amount:,.2f} exceeds the ${limit:,.0f} limit; at most ${limit:,.0f} "
+            f"is reimbursable and the remaining ${amount - limit:,.2f} is not"
+        )
+    return _verdict(
+        "expense", checked=True, compliant=within, route=route, reason=reason,
+        document_id=rule["document_id"], section_id=rule["section_id"],
+        category=category, amount_usd=amount, limit_usd=limit,
+        comparison=comparison,
+        reimbursable_usd=min(amount, limit),
+        receipt_required=receipt,
+        source_text=rule["source_text"],
+    )
+
+
+def _check_pto(profile: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+    days = float(args.get("days_requested") or 0)
+    if days <= 0:
+        return _not_checked("pto", "days_requested is required")
+    rule = policy_rules()["pto"]
+    balance = check_pto_balance(profile["employee_id"])
+    if balance.get("plan") == "NOT_ELIGIBLE":
+        return _verdict(
+            "pto", checked=True, compliant=False, route="NOT_ELIGIBLE",
+            reason="this employment type does not accrue paid time off",
+            document_id="POL-001", section_id="1", days_requested=days,
+        )
+    available = float(balance.get("available_days") or 0)
+    enough = days <= available
+    approval = days >= rule["manager_approval_from_days"]
+    if not enough:
+        route = "INSUFFICIENT_BALANCE"
+    elif approval:
+        route = "MANAGER_APPROVAL"
+    else:
+        route = "SELF_SERVICE"
+    return _verdict(
+        "pto", checked=True, compliant=enough, route=route,
+        reason=(
+            f"{days:g} day(s) requested, {available:g} available"
+            + ("; manager approval required" if enough and approval else "")
+        ),
+        document_id=rule["document_id"], section_id=rule["section_id"],
+        days_requested=days, available_days=available,
+        comparison=f"{days:g} {'<=' if enough else '>'} {available:g}",
+        manager_approval_required=approval, as_of=balance.get("as_of"),
+    )
+
+
+def _check_remote(profile: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+    rule = policy_rules()["remote_work"]
+    eligible = bool(profile.get("remote_eligible")) and not profile.get("designated_onsite_role")
+    if not eligible:
+        return _verdict(
+            "remote_work", checked=True, compliant=False, route="NOT_ELIGIBLE",
+            reason="the role is designated onsite or not remote-eligible",
+            document_id="POL-003", section_id="3", remote_eligible=False,
+        )
+    country = (args.get("destination_country") or "").upper() or None
+    state = (args.get("destination_region") or "").upper() or None
+    days = float(args.get("duration_days") or 0)
+    home_country = (profile.get("country") or "US").upper()
+    if country and country != home_country:
+        limit = rule["international_approval_after_days"]
+        needs = days == 0 or days > limit
+        return _verdict(
+            "remote_work", checked=True, compliant=not needs,
+            route="PEOPLE_OPS_AND_LEGAL_APPROVAL" if needs else "MANAGER_APPROVAL",
+            reason=(
+                f"working from {country} for {days:g} days"
+                + (f" exceeds {limit} days and needs People Operations and Legal approval"
+                   if needs else f" is within {limit} days")
+            ),
+            document_id=rule["document_id"], section_id=rule["section_id"],
+            destination_country=country, duration_days=days, limit_days=limit,
+            comparison=f"{days:g} {'>' if needs else '<='} {limit}",
+        )
+    if state and state != (profile.get("region") or "").upper():
+        return _verdict(
+            "remote_work", checked=True, compliant=False, route="MANAGER_APPROVAL",
+            reason=f"working from {state} (another state) needs approval",
+            document_id="POL-003", section_id="4.2", destination_region=state,
+        )
+    return _verdict(
+        "remote_work", checked=True, compliant=True, route="SELF_SERVICE",
+        reason="employee is remote-eligible in their home location",
+        document_id="POL-003", section_id="3",
+    )
+
+
+CHECKS = {"expense": _check_expense, "pto": _check_pto, "remote_work": _check_remote}
 
 
 def check_policy_compliance(
     employee_id: str,
     check_type: str,
-    requested_hours: float = 0,
+    days_requested: float = 0,
+    amount: float | None = None,
+    expense_category: str | None = None,
+    destination_country: str | None = None,
     destination_region: str | None = None,
-    requested_days: float = 0,
-    amount: float = 0,
+    duration_days: float = 0,
 ) -> dict[str, Any]:
+    check = CHECKS.get((check_type or "").strip().lower())
+    if check is None:
+        return _not_checked(str(check_type), f"unknown check_type {check_type!r}")
     profile = lookup_employee_profile(employee_id)
     if not profile.get("found"):
-        return {"compliant": False, "reason": "unknown employee", "employee_id": employee_id}
+        return _not_checked(check_type, f"unknown employee {employee_id}")
+    return check(profile, {
+        "days_requested": days_requested,
+        "amount": amount,
+        "expense_category": expense_category,
+        "destination_country": destination_country,
+        "destination_region": destination_region,
+        "duration_days": duration_days,
+    })
 
-    if check_type == "remote_work":
-        eligible = bool(profile["remote_eligible"]) and not profile.get("designated_onsite_role")
-        same_region = destination_region is None or destination_region == profile["region"]
-        compliant = eligible and same_region
-        if not eligible:
-            reason = "employee is not remote-eligible (onsite role or work model)"
-        elif not same_region:
-            reason = "work from another state or country needs approval (POL-003 4.2/4.3, POL-004)"
-        else:
-            reason = "employee is remote-eligible"
-        return {
-            "compliant": compliant,
-            "check_type": check_type,
-            "employee_id": employee_id,
-            "remote_eligible": eligible,
-            "work_model": profile.get("work_model"),
-            "employee_region": profile["region"],
-            "destination_region": destination_region,
-            "reason": reason,
-            "policy_document_id": "POL-003",
-            "policy_section_id": "3" if compliant or not eligible else "4.2",
-        }
 
-    if check_type == "pto":
-        days = float(requested_days or 0) or float(requested_hours or 0) / HOURS_PER_DAY
-        balance = check_pto_balance(employee_id)
-        if balance.get("plan") == "NOT_ELIGIBLE":
-            return {
-                "compliant": False,
-                "check_type": check_type,
-                "employee_id": employee_id,
-                "requested_days": days,
-                "reason": "not eligible for paid time off",
-                "policy_document_id": "POL-001",
-                "policy_section_id": "1",
-            }
-        available = float(balance.get("available_days") or 0)
-        compliant = available >= days
-        return {
-            "compliant": compliant,
-            "check_type": check_type,
-            "employee_id": employee_id,
-            "requested_days": days,
-            "available_days": available,
-            "as_of": balance.get("as_of"),
-            "manager_approval_required": days >= 3,
-            "reason": "sufficient PTO balance" if compliant else "insufficient PTO balance",
-            "policy_document_id": "POL-001",
-            "policy_section_id": "2.1" if compliant else "3.1",
-        }
+BENEFITS_PATH = RULES_PATH.parent / "benefits.json"
 
-    if check_type in EXPENSE_CHECK_TYPES:
-        # The comparison is made here, not by the model reading prose. A section
-        # titled "What is not reimbursed" describes exclusions; applying it to a
-        # figure UNDER the limit inverts the rule, which is how a $400 chair was
-        # once answered as not reimbursable.
-        amount = float(amount or 0)
-        stipend = _limit_from_corpus("POL-005", "2.1")
-        if stipend is None:
-            # No number invented. If the corpus does not state the limit, the
-            # honest answer is that the comparison cannot be made.
-            return {
-                "compliant": False,
-                "check_type": check_type,
-                "employee_id": employee_id,
-                "amount": amount,
-                "reason": "could not read the home office stipend from POL-005 2.1",
-                "policy_document_id": "POL-005",
-                "policy_section_id": "2.1",
-            }
-        if amount <= stipend:
-            return {
-                "compliant": True,
-                "check_type": check_type,
-                "employee_id": employee_id,
-                "amount": amount,
-                "stipend": stipend,
-                "route": "CLAIM_WITH_RECEIPT",
-                "reason": (
-                    f"${amount:.0f} is within the ${stipend:.0f} one-time home office "
-                    "stipend, so it is reimbursable. Submit the receipt within 30 days."
-                ),
-                "policy_document_id": "POL-005",
-                "policy_section_id": "2.1",
-            }
-        return {
-            "compliant": False,
-            "check_type": check_type,
-            "employee_id": employee_id,
-            "amount": amount,
-            "stipend": stipend,
-            "route": "NEEDS_PRE_APPROVAL",
-            "reason": (
-                f"${amount:.0f} exceeds the ${stipend:.0f} one-time home office "
-                "stipend, so it needs manager pre-approval."
-            ),
-            "policy_document_id": "POL-005",
-            "policy_section_id": "2.1",
-        }
 
-    return {"compliant": False, "reason": f"unsupported check_type {check_type}"}
+def lookup_benefits_status(employee_id: str) -> dict[str, Any]:
+    """Synthetic benefits elections from mock_data/benefits.json."""
+    rows = {r["employee_id"]: r for r in json.loads(BENEFITS_PATH.read_text())}
+    row = rows.get(employee_id)
+    if not row:
+        return {"found": False, "employee_id": employee_id}
+    return {"found": True, **row,
+            "reason": "eligible for benefits" if row["eligible"]
+            else f"{row['employment_type'].lower()} employees are not benefits-eligible",
+            "policy_document_id": "POL-007", "policy_section_id": "1"}
+
+
+TICKETS: list[dict[str, Any]] = []
+
+
+def create_mock_hr_ticket(
+    employee_id: str, category: str, summary: str, confirm: bool = False
+) -> dict[str, Any]:
+    """Mock write held in memory. Without confirm=True only a preview returns."""
+    ticket = {"employee_id": employee_id, "category": category, "summary": summary}
+    if not confirm:
+        return {"status": "awaiting_confirmation", "created": False, "preview": ticket}
+    ticket["ticket_id"] = f"MOCK-{len(TICKETS) + 1:04d}"
+    TICKETS.append(ticket)
+    return {"status": "created_mock", "created": True, **ticket,
+            "note": "Mock ticket only; no HR system was changed."}
 
 
 def draft_hr_email(employee_id: str, topic: str, body_points: list[str] | None = None) -> dict[str, Any]:
