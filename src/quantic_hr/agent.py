@@ -49,6 +49,18 @@ MAX_TOOL_ROUNDS = 6
 CITATION_MIN_SCORE = float(os.environ.get("QUANTIC_MIN_SIMILARITY", "0.2"))
 CITATION_LIMIT = 3
 
+# Tools whose result is itself evidence: a balance, a route, a profile. When one
+# of these ran successfully, the agent has something real to answer from even if
+# retrieval returned a weak passage. Abstaining in that case discarded a live
+# balance and told the user their HR records could not be found.
+DATA_TOOLS = {
+    "check_pto_balance",
+    "check_policy_compliance",
+    "lookup_employee_profile",
+    "lookup_benefits_status",
+}
+
+
 UNAVAILABLE_MESSAGE = (
     "The HR database is waking up after being idle, so I could not check the "
     "policies just now. Please ask again in about a minute."
@@ -399,7 +411,13 @@ def converse_node(state: AgentState) -> AgentState:
             "unavailable": True,
         }
     citations = _collect(traces)
-    abstained = not citations or not text or ABSTAIN_MESSAGE in text
+    # A successful data tool is evidence in its own right. Retrieval returning
+    # one weak passage -- or the model choosing limit:1 and getting a policy's
+    # introduction -- must not make the agent deny knowing a balance it holds.
+    tool_evidence = any(
+        not t.get("is_error") and t.get("name") in DATA_TOOLS for t in traces
+    )
+    abstained = (not citations and not tool_evidence) or not text or ABSTAIN_MESSAGE in text
     return {
         **state,
         "mode": "bedrock",
