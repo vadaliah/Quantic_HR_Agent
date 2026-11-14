@@ -202,6 +202,7 @@ def database_url() -> str:
     )
 
 
+
 @contextmanager
 def connection() -> Iterator[Any]:
     """A connection-like object backed by whichever path is configured.

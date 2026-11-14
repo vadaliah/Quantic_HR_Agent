@@ -11,10 +11,26 @@ Usage:
     python scripts/ingest_corpus.py --force            # re-embed every chunk
     python scripts/ingest_corpus.py --skip-embeddings  # text only (keyword search), no AWS
 
+The document id comes from the file name, not from the "Document ID" line in the
+body: the annexes write theirs as "POL-005-A" while their file names read
+"POL-005A", and two different ids for one document would split its chunks.
+
 Chunks are one per numbered policy section (## or ### / <h2> or <h3>), split
 further only if a section exceeds --max-words. chunk_id is "<document>:<section>"
 so re-running updates rows in place; content_sha skips re-embedding unchanged
 text, and chunks that no longer exist in a document are deleted.
+
+Section ids come from quantic_hr.sections, which handles the three heading forms
+this corpus uses:
+
+    ## 1. Observed Holidays      -> "1"
+    ### 3.1 Notice and approval  -> "3.1"
+    ## A.1 Before the Start Date -> "A.1"      (annex documents)
+
+Before that, a digits-only pattern was used, so every "A.n" heading fell through
+to a slug of the heading text and top-level annex sections were stored as "0".
+Those chunks could not be cited: a reader asking to open "section 0" finds
+nothing.
 """
 
 from __future__ import annotations
@@ -31,14 +47,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-DOC_ID_RE = re.compile(r"^(POL-\d{3})")
-SECTION_RE = re.compile(r"^(\d+(?:\.\d+)*)\.?\s+(.*)$")
+from quantic_hr import sections as sections_mod  # noqa: E402
+
+# A trailing letter is part of the id: POL-001A is the annex to POL-001, not a
+# second POL-001. Without the [A-Z]? the annex collapsed onto its parent and the
+# loader raised "duplicate POL-001", which is how this was found.
+DOC_ID_RE = re.compile(r"^(POL-\d{3}[A-Z]?)")
 
 
 @dataclass
 class Section:
     level: int
     heading: str
+    section_id: str | None = None
     lines: list[str] = field(default_factory=list)
 
 
@@ -84,7 +105,9 @@ def parse_markdown(text: str) -> list[Section]:
     for raw in text.splitlines():
         match = re.match(r"^(#{1,6})\s+(.*)$", raw)
         if match:
-            sections.append(Section(len(match.group(1)), _clean(match.group(2))))
+            heading = _clean(match.group(2))
+            section_id, _, _ = sections_mod.parse_heading(match.group(2))
+            sections.append(Section(len(match.group(1)), heading, section_id))
         elif sections:
             sections[-1].lines.append(re.sub(r"\*\*(.+?)\*\*", r"\1", raw.rstrip()))
     return sections
@@ -115,7 +138,9 @@ class _HtmlSections(HTMLParser):
         if tag == "title":
             self._in_title = False
         elif re.fullmatch(r"h[1-6]", tag) and self._heading_level is not None:
-            self.sections.append(Section(self._heading_level, _clean("".join(self._buffer))))
+            raw = "".join(self._buffer)
+            section_id, _, _ = sections_mod.parse_heading(raw)
+            self.sections.append(Section(self._heading_level, _clean(raw), section_id))
             self._buffer = []
             self._heading_level = None
         elif tag in self.BLOCKS:
@@ -169,15 +194,27 @@ def load_document(path: Path, corpus_root: Path, max_words: int) -> Document:
     title = h1
 
     chunks: list[Chunk] = []
+    current_section: str | None = None
     for section in sections:
         if section.level not in (2, 3):
-            continue  # h1 holds only the document metadata block
+            if section.level == 1:
+                continue  # h1 holds only the document metadata block
+            current_section = sections_mod.inheriting_section_id(section.section_id, current_section)
+            continue
         body = "\n".join(section.lines).strip()
         body = re.sub(r"\n{3,}", "\n\n", body)
         if not body:
-            continue  # a parent heading whose text lives in its subsections
-        numbered = SECTION_RE.match(section.heading)
-        section_id = numbered.group(1) if numbered else re.sub(r"\W+", "-", section.heading.lower()).strip("-")
+            # A parent heading whose text lives in its subsections still sets the
+            # parent id, so an unnumbered child inherits it rather than starting
+            # a new section.
+            current_section = sections_mod.inheriting_section_id(section.section_id, current_section)
+            continue
+        current_section = sections_mod.inheriting_section_id(section.section_id, current_section)
+        # An unnumbered heading inherits its parent. Falling back to the document
+        # id keeps the chunk addressable, which is better than a slug of the
+        # heading text: a slug can collide, and it is not a section a reader can
+        # open. Never "0".
+        section_id = current_section or document_id
         parts = _split_words(body, max_words)
         for part_number, part in enumerate(parts, start=1):
             suffix = f":{part_number}" if len(parts) > 1 else ""
@@ -294,6 +331,47 @@ def write(documents: list[Document], *, database_url: str, embed: bool, force: b
     return stats
 
 
+def check(documents: list[Document]) -> int:
+    """Report section ids that no reader could open. Returns a process exit code.
+
+    Runs inside main() even on a normal ingest, because a chunk stored under a
+    section id that does not exist in its document can never be cited usefully --
+    the answer names a section that isn't there.
+    """
+    problems: list[str] = []
+    unnumbered = 0
+    for doc in documents:
+        by_id = {c.section_id for c in doc.chunks}
+        for chunk in doc.chunks:
+            sid = (chunk.section_id or "").strip()
+            if sid in ("", "0"):
+                problems.append(f"{doc.document_id}:{chunk.chunk_id} section_id={sid!r}")
+        print(f"{doc.document_id:<8} {len(doc.chunks):>3} chunks  {len(by_id):>3} sections  {doc.source_uri}")
+
+    for doc in documents:
+        source = (ROOT / doc.source_uri)
+        if not source.exists():
+            continue
+        for line in source.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("<h2") or stripped.startswith("<h3"):
+                body = re.sub(r"<[^>]+>", "", stripped)
+                if sections_mod.parse_heading(body)[0] is None:
+                    unnumbered += 1
+            elif stripped.startswith("##") or stripped.startswith("###"):
+                if sections_mod.parse_heading(stripped)[0] is None:
+                    unnumbered += 1
+
+    print(f"{unnumbered} headings carry no number (they inherit their parent section)")
+    if problems:
+        print(f"\n{len(problems)} chunk(s) have an unopenable section id:")
+        for line in problems[:10]:
+            print(f"  {line}")
+        return 1
+    print("section ids: all addressed to a real section or to the document id")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--corpus", type=Path, default=ROOT / "corpus")
@@ -310,6 +388,11 @@ def main(argv: list[str] | None = None) -> int:
     for doc in documents:
         print(f"{doc.document_id}  {len(doc.chunks):>3} chunks  {doc.source_uri}")
     print(f"{len(documents)} documents, {total_chunks} chunks, ~{total_tokens} tokens to embed (estimate)")
+
+    # Stop before embedding if any chunk would land on an unopenable section id.
+    if check(documents) != 0:
+        print("refusing to ingest: fix the section ids above", file=sys.stderr)
+        return 1
 
     if args.dry_run:
         print("dry run: no AWS call, no database write")
