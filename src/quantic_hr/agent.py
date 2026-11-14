@@ -106,7 +106,12 @@ Rules:
 - create_mock_hr_ticket: call with confirm=false, show the preview, and only call
   confirm=true after the user says yes.
 - draft_hr_email only drafts; never say an email was sent or a record was changed.
-- If the tools return nothing relevant, reply exactly: {ABSTAIN_MESSAGE}
+- If a tool returned employee data, USE IT. A balance, a route or a profile is
+  an answer in itself; do not refuse because a policy search came back thin or
+  returned a document's introduction.
+- Reply exactly: {ABSTAIN_MESSAGE} ONLY when no tool returned employee data AND
+  the policy search returned nothing usable. If you can answer from a tool
+  result, answer.
 - Do not include reasoning, planning or thinking tags in your answer. Reply
   with the answer only, Be brief: a short answer, then the key conditions or next step."""
 
@@ -417,7 +422,16 @@ def converse_node(state: AgentState) -> AgentState:
     tool_evidence = any(
         not t.get("is_error") and t.get("name") in DATA_TOOLS for t in traces
     )
-    abstained = (not citations and not tool_evidence) or not text or ABSTAIN_MESSAGE in text
+    # `ABSTAIN_MESSAGE in text` matched any answer that mentioned the phrase, and
+    # the prompt asked the model to reply with it when retrieval looked thin --
+    # so a correct balance answer was replaced by a refusal. Only a BARE abstain
+    # counts now, and a successful data tool overrides even that.
+    bare_abstain = (
+        text.strip().rstrip(".").lower() == ABSTAIN_MESSAGE.strip().rstrip(".").lower()
+    )
+    abstained = (
+        (not citations and not tool_evidence) or not text or (bare_abstain and not tool_evidence)
+    )
     return {
         **state,
         "mode": "bedrock",
