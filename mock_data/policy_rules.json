@@ -142,5 +142,25 @@
     "document_id": "POL-010",
     "section_id": "10",
     "source_text": "Only software on the approved list may be installed on a company device"
+  },
+  "pto_accrual": {
+    "days_per_completed_month": 1.25,
+    "days_per_year": 15,
+    "method": "pro_rata_days_from_1_january",
+    "accrual_document_id": "POL-001",
+    "accrual_section_id": "2.1",
+    "accrual_source_text": "Full-time employees accrue 15 days (1.25 days per month of completed service)",
+    "pro_rata": {
+      "days_to_months_divisor": 30.4375,
+      "divisor_name": "AVERAGE_MONTH_DAYS",
+      "divisor_derivation": "365.25 / 12",
+      "divisor_note": "converts elapsed calendar days to months, so the policy rate of 1.25 days per month applies continuously rather than only at month end",
+      "divisor_document_id": "POL-001",
+      "divisor_section_id": "2.1"
+    },
+    "carryover_max_days": 5,
+    "carryover_document_id": "POL-001",
+    "carryover_section_id": "4.1",
+    "carryover_source_text": "A maximum of 5 days of unused vacation may be carried into the following calendar year"
   }
 }

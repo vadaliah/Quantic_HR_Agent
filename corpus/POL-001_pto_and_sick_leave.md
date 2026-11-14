@@ -18,7 +18,10 @@ and should consult their engagement agreement.
 ### 2.1 Annual entitlement
 
 Full-time employees accrue 15 days (1.25 days per month of completed service) of paid vacation each
-calendar year. Accrual begins on the first day of employment.
+calendar year. Accrual begins on the first day of employment. Accrual is
+calculated pro rata on the days elapsed since 1 January of the current year,
+at 1.25 days per month, so a balance accrues continuously through the year
+rather than only at month end.
 
 ### 2.2 Part-time employees
 

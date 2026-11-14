@@ -37,56 +37,128 @@ def lookup_employee_profile(employee_id: str) -> dict[str, Any]:
 
 
 def check_pto_balance(employee_id: str) -> dict[str, Any]:
-    """PTO in days from pto_accruals via pto_balance_as_of() (migration 004).
+    """PTO in DAYS, computed from the policy rule applied to the employee's facts.
+
+    The RULE comes from mock_data/policy_rules.json, each figure carrying the
+    section that states it: the accrual rate and the pro-rata method from POL-001
+    2.1, the carryover cap from POL-001 4.1. The FACTS come from the database:
+    the hire date, days taken this year, pending days, and carryover held.
+
+    The rate is deliberately NOT read from pto_accruals.accrual_days_per_month.
+    A rule stored in a table is a rule the policy cannot govern: edit POL-001 and
+    the answers would not move. Reading it from the rules file, with a citation,
+    means the sentence a reader checks is the sentence the answer used.
 
     pto_balances (hours, migration 002) is deprecated and the runtime role has no
     grant on it after migration 005.
     """
+    # 30.4375 is 365.25 / 12: the average Gregorian month. It converts elapsed
+    # calendar days into months, so a per-month policy rate applies continuously
+    # rather than only at month end. Named, and derived rather than written as a
+    # literal, because a bare divisor in an expression is the kind of number a
+    # reader cannot account for six months later. tests/test_policy_rules.py
+    # asserts this default and the rules file agree.
+    AVERAGE_MONTH_DAYS = 365.25 / 12
+
+    rule = policy_rules()["pto_accrual"]
+    pro_rata = rule["pro_rata"]
+    rate = float(rule["days_per_completed_month"])
+    divisor = float(pro_rata["days_to_months_divisor"])
+    if abs(divisor - AVERAGE_MONTH_DAYS) > 0.0001:
+        raise ValueError(
+            f"pro-rata divisor {divisor} ({pro_rata.get('divisor_name')}) does not "
+            f"match AVERAGE_MONTH_DAYS {AVERAGE_MONTH_DAYS:.4f} "
+            f"({pro_rata.get('divisor_derivation')}); one of the two has changed"
+        )
+    cap = float(rule["carryover_max_days"])
+
     with connection() as conn:
         row = conn.execute(
             """
-            SELECT b.employee_id, b.plan, b.accrued_days, b.available_days,
-                   a.carryover_days, a.taken_days_this_year, a.pending_days,
-                   a.balance_year, COALESCE(%s::date, CURRENT_DATE) AS as_of
-            FROM pto_balance_as_of(COALESCE(%s::date, CURRENT_DATE)) b
-            JOIN pto_accruals a USING (employee_id)
-            WHERE b.employee_id = %s
+            SELECT a.employee_id, a.plan, a.carryover_days, a.taken_days_this_year,
+                   a.pending_days, a.balance_year, e.hire_date,
+                   COALESCE(%s::date, CURRENT_DATE) AS as_of,
+                   GREATEST(make_date(extract(year FROM COALESCE(%s::date, CURRENT_DATE))::int, 1, 1),
+                            e.hire_date) AS accrual_start
+            FROM pto_accruals a
+            JOIN employees e USING (employee_id)
+            WHERE a.employee_id = %s
             """,
             (as_of_date(), as_of_date(), employee_id),
         ).fetchone()
     if not row:
         return {"found": False, "employee_id": employee_id}
-    result: dict[str, Any] = {"found": True}
-    for key, value in row.items():
-        if key in {"employee_id", "plan", "balance_year"}:
-            result[key] = value
-        elif key == "as_of":
-            result[key] = value.isoformat() if hasattr(value, "isoformat") else value
-        else:
-            result[key] = float(value)
 
-    # Show the arithmetic. accrued_days is a GROSS figure and available_days is
-    # the CLOSING balance, so placed side by side they read as if one should
-    # equal the other plus carryover. A reader who adds them gets a number that
-    # does not match, and cannot see why. The formula removes the inference.
-    accrued = result.get("accrued_days") or 0.0
-    carry = result.get("carryover_days") or 0.0
-    taken = result.get("taken_days_this_year") or 0.0
-    pending = result.get("pending_days") or 0.0
-    result["available_formula"] = (
-        f"{accrued:.2f} + {carry:.2f} - {taken:.2f} - {pending:.2f} = "
-        f"{result.get('available_days', 0.0):.2f}"
-    )
-    result["available_note"] = (
-        "available_days is the closing balance: accrued plus carryover, less "
-        "taken and pending. It is not the sum of accrued and carryover."
-    )
-    # The balance rule is POL-001 2.1; the formula is worked in POL-001A A.1.
-    # Citing 3.1 (notice and approval) for a balance claim does not support it.
-    result["policy_document_id"] = "POL-001"
-    result["policy_section_id"] = "2.1"
-    result["policy_annex_document_id"] = "POL-001A"
-    result["policy_annex_section_id"] = "A.1"
+    as_of = row["as_of"]
+    as_of_iso = as_of.isoformat() if hasattr(as_of, "isoformat") else str(as_of)
+    start = row["accrual_start"]
+    days_elapsed = max(0, (as_of - start).days)
+    months = days_elapsed / divisor
+    accrued = round(rate * months, 2)
+
+    carryover_stored = float(row["carryover_days"] or 0)
+    carryover = min(carryover_stored, cap)
+    taken = float(row["taken_days_this_year"] or 0)
+    pending = float(row["pending_days"] or 0)
+    available = round(accrued + carryover - taken - pending, 2)
+
+    result: dict[str, Any] = {
+        "found": True,
+        "employee_id": row["employee_id"],
+        "plan": row["plan"],
+        "as_of": as_of_iso,
+        "balance_year": row["balance_year"],
+        # the facts
+        "hire_date": row["hire_date"].isoformat() if hasattr(row["hire_date"], "isoformat") else str(row["hire_date"]),
+        "accrual_start": start.isoformat() if hasattr(start, "isoformat") else str(start),
+        "days_elapsed": days_elapsed,
+        "months_elapsed": round(months, 4),
+        "taken_days_this_year": taken,
+        "pending_days": pending,
+        "carryover_stored": carryover_stored,
+        "carryover_applied": carryover,
+        "carryover_cap": cap,
+        # the result, and how it was reached
+        "accrued_days": accrued,
+        "available_days": available,
+        "available_formula": (
+            f"{accrued:.2f} + {carryover:.2f} - {taken:.2f} - {pending:.2f} = {available:.2f}"
+        ),
+        "available_note": (
+            "available_days is the closing balance: accrued plus carryover, less "
+            "taken and pending. It is not the sum of accrued and carryover."
+        ),
+        "rules": [
+            {
+                "document_id": rule["accrual_document_id"],
+                "section_id": rule["accrual_section_id"],
+                "fact": f"accrual {rate} days per month, pro rata from 1 January",
+                "source_text": rule["accrual_source_text"],
+            },
+            {
+                "document_id": pro_rata["divisor_document_id"],
+                "section_id": pro_rata["divisor_section_id"],
+                "fact": (
+                    f"pro-rata method: {pro_rata['divisor_name']} = "
+                    f"{pro_rata['divisor_derivation']} = {divisor}"
+                ),
+                "source_text": pro_rata["divisor_note"],
+            },
+            {
+                "document_id": rule["carryover_document_id"],
+                "section_id": rule["carryover_section_id"],
+                "fact": f"carryover capped at {cap:g} days",
+                "source_text": rule["carryover_source_text"],
+            },
+        ],
+        "policy_document_id": rule["accrual_document_id"],
+        "policy_section_id": rule["accrual_section_id"],
+    }
+    if carryover_stored > cap:
+        result["carryover_note"] = (
+            f"{carryover_stored:g} days were held over, but the policy caps carryover "
+            f"at {cap:g} days, so {cap:g} is applied."
+        )
     return result
 
 

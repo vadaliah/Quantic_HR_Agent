@@ -75,6 +75,13 @@ Rules:
 - Search the policy corpus before answering any policy question.
 - The employee_id is fixed by the session; do not ask for or use another one.
 - Cite every policy statement as [document_id section_id], for example [POL-001 2.1].
+- Retrieve before you calculate. For a PTO, expense or remote-work question,
+  call search_policy_documents first, then the data tool, then the compliance
+  check. The policy states the rule; the data tool states this employee's facts.
+  Never state a rule, a limit or a threshold that you have not retrieved.
+- Cite only what you retrieved, or what a tool's `rules` array names as the
+  section that supplied a figure. Do not cite a section to support a number the
+  tool computed, unless the tool named that section as its source.
 - For any PTO, expense or remote-work decision call check_policy_compliance and
   state its comparison, route and reason. Never compare amounts or days yourself.
 - If check_policy_compliance returns checked=false, say the rule could not be
@@ -162,7 +169,7 @@ def _plan(message: str, employee_id: str) -> list[dict[str, Any]]:
 
 def _summarize(result: Any) -> str:
     text = result if isinstance(result, str) else json.dumps(result, default=str)
-    return text[:500]
+    return text[:2000]
 
 
 def _citations_from(result: Any) -> list[dict[str, Any]]:
@@ -190,16 +197,25 @@ def _citations_from(result: Any) -> list[dict[str, Any]]:
                     "score": round(float(score), 4) if score is not None else None,
                     "snippet": str(match.get("content", ""))[:260],
                 })
-        # A compliance check returns a route, not a chunk, so its citation has
-        # no passage behind it. The tool's own reason is the text it does have.
-        if result.get("policy_document_id"):
-            citations.append({
-                "document_id": str(result["policy_document_id"]),
-                "section_id": str(result.get("policy_section_id", "")),
-                "title": str(result.get("check_type", "policy")),
-                "score": None,
-                "snippet": str(result.get("reason", ""))[:260],
-            })
+        # A tool result is evidence only when it carries a PASSAGE. This used to
+        # wrap any result with a policy_document_id as a citation, and
+        # check_pto_balance returns a document id but no passage -- so a computed
+        # figure about one employee appeared in the citation panel with a blank
+        # snippet, beside real policy text, as if both were quotes from the
+        # corpus. A balance is a decision, not a citation.
+        #
+        # `rules` is the exception: when a tool states which section supplied a
+        # figure it used, that section IS the evidence, and it carries its own
+        # source_text.
+        for rule in result.get("rules") or []:
+            if rule.get("document_id") and rule.get("source_text"):
+                citations.append({
+                    "document_id": str(rule["document_id"]),
+                    "section_id": str(rule.get("section_id", "")),
+                    "title": str(rule.get("fact", "policy")),
+                    "score": None,
+                    "snippet": str(rule["source_text"])[:260],
+                })
     return citations
 
 
