@@ -2,12 +2,32 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import date, datetime
 from typing import Any
 
 from quantic_hr import bedrock
 from quantic_hr.db import connection
 
 HOURS_PER_DAY = 8.0
+
+
+def _as_date(value: object) -> date:
+    """Coerce a date column to a date object.
+
+    The two database paths return different Python types for the same column:
+    psycopg returns a `date`, while the Data API returns every scalar as JSON, so
+    a date arrives as the string "2026-11-14". Arithmetic on the string raises
+
+        TypeError: unsupported operand type(s) for -: 'str' and 'str'
+
+    which is how a PTO question came to fail with the balance tool erroring and
+    the agent reporting that it could not find the employee's records.
+    """
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value)[:10])
 
 
 def as_of_date() -> str | None:
@@ -89,9 +109,9 @@ def check_pto_balance(employee_id: str) -> dict[str, Any]:
     if not row:
         return {"found": False, "employee_id": employee_id}
 
-    as_of = row["as_of"]
-    as_of_iso = as_of.isoformat() if hasattr(as_of, "isoformat") else str(as_of)
-    start = row["accrual_start"]
+    as_of = _as_date(row["as_of"])
+    start = _as_date(row["accrual_start"])
+    as_of_iso = as_of.isoformat()
     days_elapsed = max(0, (as_of - start).days)
     months = days_elapsed / divisor
     accrued = round(rate * months, 2)
@@ -109,8 +129,8 @@ def check_pto_balance(employee_id: str) -> dict[str, Any]:
         "as_of": as_of_iso,
         "balance_year": row["balance_year"],
         # the facts
-        "hire_date": row["hire_date"].isoformat() if hasattr(row["hire_date"], "isoformat") else str(row["hire_date"]),
-        "accrual_start": start.isoformat() if hasattr(start, "isoformat") else str(start),
+        "hire_date": _as_date(row["hire_date"]).isoformat(),
+        "accrual_start": start.isoformat(),
         "days_elapsed": days_elapsed,
         "months_elapsed": round(months, 4),
         "taken_days_this_year": taken,

@@ -45,6 +45,11 @@ CONTEXT_TURNS = 2      # passed to the planner, for follow-ups
 WARMUP_ATTEMPTS = 6
 WARMUP_DELAY = 10
 
+# Reported on /health so a deploy can be verified in one request. Without it
+# there is no way to tell whether the running container has the commit you
+# think it does -- a source grep proves the file on disk, not the file running.
+BUILD = os.environ.get("QUANTIC_BUILD") or "2026-11-15-abstain-fix"
+
 app = FastAPI(title="Quantic HR BFF", version="0.7.0")
 
 from quantic_hr.evaluation import ROOT as REPO_ROOT, load_results  # noqa: E402
@@ -95,6 +100,7 @@ def health() -> dict:
         "mcp": "stdio",
         "database": database,
         "threads_in_session": len(THREADS),
+        "build": BUILD,
     }
 
 
