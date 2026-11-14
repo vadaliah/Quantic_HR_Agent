@@ -37,6 +37,8 @@ COPY --from=build /app/src /app/src
 COPY web ./web
 COPY evaluation ./evaluation
 COPY --from=ui /ui/dist /app/static
+COPY mock_data/ ./mock_data/
+COPY corpus/ ./corpus/
 ENV PATH=/app/.venv/bin:$PATH \
     PYTHONPATH=/app/src \
     PYTHONUNBUFFERED=1 \
