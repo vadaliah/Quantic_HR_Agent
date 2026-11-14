@@ -1,19 +1,12 @@
-# Allowlist: images need only the Python project and (Dockerfile.render) the
-# UI sources. Keeps infrastructure/ (node_modules, cdk.out), corpus, .env
-# files and git out of the build context.
-*
-!Dockerfile
-!Dockerfile.render
-!pyproject.toml
-!uv.lock
-!src
-!web
-!evaluation
-!frontend/package.json
-!frontend/package-lock.json
-!frontend/index.html
-!frontend/vite.config.js
-!frontend/src/**
+.git
+.venv
+.venv/**
+__pycache__
 **/__pycache__
 **/*.pyc
-**/*.egg-info
+.idea
+.env
+.env.*
+infrastructure/node_modules
+infrastructure/cdk.out
+frontend/node_modules
