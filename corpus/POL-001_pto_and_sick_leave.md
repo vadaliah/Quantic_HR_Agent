@@ -17,13 +17,14 @@ and should consult their engagement agreement.
 
 ### 2.1 Annual entitlement
 
-Full-time employees accrue 15 days (1.25 days per month of completed service) of
-paid vacation each calendar year. Accrual begins on the first day of employment.
+Full-time employees accrue 15 days (1.25 days per month of completed service) of paid vacation each
+calendar year. Accrual begins on the first day of employment.
 
 ### 2.2 Part-time employees
 
-Part-time employees scheduled for fewer than 30 hours per week accrue vacation on
-a prorated basis, in proportion to scheduled hours against a 40-hour week.
+Part-time employees scheduled for fewer than 30 hours per week accrue
+vacation on a prorated basis, in proportion to scheduled hours against a 40-hour
+week.
 
 ### 2.3 Accrual during leave
 
@@ -34,34 +35,27 @@ required by law. Accrual pauses during unpaid leave.
 
 ### 3.1 Notice and approval
 
-Employees must submit vacation requests through the People Operations portal and
-notify their manager.
-
-- Requests of **fewer than 3 days** require manager notification only.
-- Requests of **3 days or more** require manager approval before any travel is
-  booked.
-- All requests should be submitted at least **5 business days** in advance.
-  Requests submitted with less notice may be declined for operational reasons.
-
-### 3.2 Manager decision
-
-Managers review requests against team coverage, payroll close dates, and any
-applicable blackout period. A decision is normally returned within two business
-days of submission.
-
-### 3.3 Blackout periods
-
-PTO is not normally approved during the last three business days of each fiscal
-quarter or during the week of the annual all-hands meeting, except where required
-by law.
+- Requests of **fewer than 3 days** are self-service: submit them in the time
+  tool and take the time, provided the balance is sufficient and no blackout
+  date in POL-002 applies.
+- Requests of **3 days or more** require manager approval before the time is
+  taken. The manager has five working days to respond; where there is no
+  response within five working days, the request is treated as approved for
+  scheduling purposes but the absence is recorded as unapproved until the
+  manager confirms it.
+- Requests covering a blackout date, or overlapping another member of the
+  team's approved absence, require manager approval regardless of length.
+- Requests of **3 days or more** are recorded in the time tool, not by email.
+- Requests for more than **10 consecutive working days** require manager
+  approval and review by People Operations.
 
 ## 4. Carryover and Separation
 
 ### 4.1 Carryover
 
-A maximum of **5 days** of unused vacation may be carried into the following
-calendar year. Unused vacation above 5 days is forfeited on 31 December and
-cannot be paid out.
+A maximum of **5 days** of unused vacation may be carried into the
+following calendar year. Unused vacation above 5 days is forfeited
+on 31 December and cannot be paid out.
 
 ### 4.2 Separation
 
@@ -71,8 +65,8 @@ Accrued, unused vacation is paid out at separation where required by law.
 
 ### 5.1 Accrual
 
-Employees accrue sick leave at 1 hour per 30 hours worked, up to a maximum
-balance of **5 days**. Sick leave is intended for an employee's own illness or
+Employees accrue sick leave at 1 hour per 30 hours worked, up to a maximum balance of
+**5 days**. Sick leave is intended for an employee's own illness or
 injury, medical appointments, and care of a family member.
 
 ### 5.2 Notification

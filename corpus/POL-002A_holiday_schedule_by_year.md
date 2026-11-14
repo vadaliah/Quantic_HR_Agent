@@ -49,9 +49,9 @@ Sunday, observed on Monday 5 July.
 
 ## A.3 Floating Holidays
 
-Each full-time employee has two floating holidays per calendar year (POL-002 2).
-They are booked in the People Operations portal like PTO, but they draw on a
-separate balance. Floating holidays:
+Each full-time employee has **two floating holidays** per calendar year
+(POL-002 2). They are booked in the People Operations portal like PTO, but they
+draw on a separate balance. Floating holidays:
 
 - do not carry over into the next year;
 - are not paid out at separation;
@@ -63,12 +63,36 @@ company holiday list does not cover.
 ## A.4 Holiday Coverage
 
 Where a team must operate on an observed holiday, the manager records the
-coverage plan at least five business days in advance (POL-002 4.1). Approved
-holiday work earns a substitute day off within 60 days, not premium pay, unless
-a site-specific agreement provides otherwise.
+coverage plan at least **five business days** in advance (POL-002 4.1). Approved
+holiday work earns a substitute day off within **60 days**, not premium pay,
+unless a site-specific agreement provides otherwise.
 
 ## A.5 Payroll Calendar Alignment
 
 Holiday pay is processed in the pay period containing the observed date, not the
 nominal date. Where an observance shifts by a day or two, the pay stub shows the
 observed date.
+
+## A.6 Blackout Dates
+
+Blackout dates restrict time off and are set by the department director, published
+at least **60 days** in advance, and may not exceed **10 working days** in a
+calendar year (POL-002 5). The standing periods for Finance and Customer
+Operations are set out in POL-002 5; a request covering one of those periods
+needs manager approval regardless of its length.
+
+Blackout dates do not affect sick leave, bereavement leave, or any leave taken
+under POL-008.
+
+## A.7 Counting the Entitlement
+
+The observances in POL-002 1 total **eleven paid holidays** a year. Across the
+two years above:
+
+| Year | Fixed observances | Floating | Total days off |
+| --- | --- | --- | --- |
+| 2026 | 11 | 2 | 13 |
+| 2027 | 11 | 2 | 13 |
+
+A part-time employee's holiday entitlement follows POL-002 3; a contractor is
+not eligible for holiday pay at all.

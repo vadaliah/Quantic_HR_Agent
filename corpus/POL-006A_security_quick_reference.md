@@ -17,6 +17,9 @@ differ, POL-006 governs.
 | Payroll bank details, IDs, keys | Restricted | No | No | No |
 
 If you cannot classify something, treat it as Confidential and ask Security.
+Employee records are also governed by POL-017; a question about who may *see* a
+record is answered there, and a question about who may *move* it is answered
+here.
 
 ## A.2 Do This, Not That
 
@@ -44,7 +47,7 @@ Company equipment must not be taken to a restricted location (POL-004 4).
 ## A.4 Passwords and Authentication
 
 - Multi-factor authentication on every company system, without exception.
-- Passwords at least 14 characters, unique per service, kept in the company
+- Passwords at least **14 characters**, unique per service, kept in the company
   password manager.
 - No shared accounts, including inside a team.
 - Report a suspected credential compromise immediately; do not wait for the next
@@ -53,13 +56,14 @@ Company equipment must not be taken to a restricted location (POL-004 4).
 ## A.5 Incident Response in Five Steps
 
 1. **Stop.** Do not keep working on the affected device.
-2. **Report** to security@acme.example within 24 hours of discovery.
+2. **Report** to security@acme.example within **24 hours** of discovery.
 3. **Preserve** the evidence: do not delete the email or wipe the device.
 4. **Cooperate** with the Security review and answer questions directly.
 5. **Continue** with your work on another approved device.
 
 Good-faith reporting is protected (POL-006 6.3). Concealing an incident is a
-violation; reporting one is not.
+violation; reporting one is not. Where the incident involves personal data, the
+privacy lead must be told within the same 24 hours under POL-017 6.
 
 ## A.6 Who to Contact
 
@@ -69,11 +73,19 @@ violation; reporting one is not.
 | Access request or permission change | Your manager, then the IT portal |
 | Policy question | security@acme.example |
 | Restricted travel destination | Legal, via People Operations |
+| Personal-data question or correction | The privacy lead, via People Operations |
 
 ## A.7 Quarterly Reminders
 
-- Access reviews run quarterly; managers confirm that each report's access still
-  matches the role (POL-006 3.1).
+- Access reviews run **quarterly**; managers confirm that each report's access
+  still matches the role (POL-006 3.1).
 - Departed colleagues lose access on their last working day; managers should
   report departures to Security in advance.
-- Security training is refreshed annually and is mandatory.
+- Security training is refreshed **annually** and is mandatory.
+
+## A.8 Equipment and Devices
+
+Company devices run the management agent, full-disk encryption, and a screen lock
+after five minutes (POL-010 4). Personal devices may reach company systems only
+through the managed access client (POL-010 9). Report lost, stolen, or damaged
+equipment to Security within 24 hours (POL-010 6).

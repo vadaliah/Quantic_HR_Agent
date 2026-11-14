@@ -19,7 +19,7 @@ within 12 months of the birth or placement.
 
 ### 2.2 Eligibility
 
-Employees must have completed at least 90 days of continuous
+Employees must have completed at least **90 days** of continuous
 employment. Employees in the first 90 days receive statutory leave
 where required by law and unpaid leave for the remainder.
 

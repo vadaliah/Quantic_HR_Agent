@@ -47,16 +47,17 @@ No end date is required for a hybrid schedule.
 
 ### 4.2 Work from another US state or territory
 
-Up to 30 consecutive days requires manager approval only. Beyond 30 days
-requires review by People Operations, because payroll registration and state tax
-withholding may change.
+Up to 30 consecutive days requires manager approval only. Beyond
+30 days requires review by People Operations, because payroll
+registration and state tax withholding may change.
 
 ### 4.3 International work
 
 International work is governed by POL-004. Requests to work outside the United
-States for more than 30 consecutive days require both People Operations and Legal
-approval before travel is booked. Requests for more than 90 consecutive days are
-normally declined, and some countries are not approved for any duration.
+States for more than 30 consecutive days require both People
+Operations and Legal approval before travel is booked. Requests for more than 90
+consecutive days are normally declined, and some countries are not approved for
+any duration.
 
 ## 5. Expectations for Remote Employees
 
@@ -76,7 +77,7 @@ costs are covered under POL-005.
 
 ## 7. Review and Change
 
-Managers may modify or end a hybrid arrangement with 30 days' notice where
+Managers may modify or end a hybrid arrangement with **30 days' notice** where
 business needs change, except where an accommodation applies. Accommodation
 requests are handled privately by People Operations and are not governed by this
 policy alone.

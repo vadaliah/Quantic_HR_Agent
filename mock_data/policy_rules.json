@@ -1,0 +1,146 @@
+{
+  "_comment": "Structured policy limits. Each rule names the section that states it, so every verdict cites the text it came from. Figures mirror corpus/POL-005_expenses_and_reimbursement.md; tests/test_policy_rules.py fails if they drift.",
+  "expense_categories": {
+    "home_office": {
+      "description": "Desk, chair, monitor or lighting for a home office",
+      "aliases": [
+        "chair",
+        "desk",
+        "monitor",
+        "lighting",
+        "furniture",
+        "office_furniture",
+        "office_chair",
+        "home_office",
+        "stipend"
+      ],
+      "limit_usd": 500,
+      "limit_kind": "one_time",
+      "document_id": "POL-005",
+      "section_id": "2.1",
+      "source_text": "one-time stipend of $500 toward a desk, ergonomic chair, monitor, or lighting"
+    },
+    "internet": {
+      "description": "Home internet for fully remote employees",
+      "aliases": [
+        "internet",
+        "broadband",
+        "wifi"
+      ],
+      "limit_usd": 50,
+      "limit_kind": "per_month",
+      "requires_work_model": "remote",
+      "document_id": "POL-005",
+      "section_id": "2.2",
+      "source_text": "Fully remote employees may claim up to $50 per month toward home internet"
+    },
+    "small_equipment": {
+      "description": "Peripherals and small equipment",
+      "aliases": [
+        "equipment",
+        "keyboard",
+        "mouse",
+        "headset",
+        "peripheral"
+      ],
+      "limit_usd": 150,
+      "limit_kind": "per_item",
+      "document_id": "POL-005",
+      "section_id": "3",
+      "source_text": "Peripheral equipment under $150 may be expensed by the employee"
+    },
+    "lodging_domestic": {
+      "description": "Hotel, United States",
+      "aliases": [
+        "hotel",
+        "lodging"
+      ],
+      "limit_usd": 250,
+      "limit_kind": "per_night",
+      "document_id": "POL-005",
+      "section_id": "3.2",
+      "source_text": "Lodging is reimbursed up to $250 per night in the United States"
+    },
+    "lodging_international": {
+      "description": "Hotel, outside the United States",
+      "aliases": [
+        "hotel_international",
+        "lodging_international"
+      ],
+      "limit_usd": 350,
+      "limit_kind": "per_night",
+      "document_id": "POL-005",
+      "section_id": "3.2",
+      "source_text": "$350 per night internationally"
+    },
+    "meals_domestic": {
+      "description": "Meals while travelling, United States",
+      "aliases": [
+        "meal",
+        "meals",
+        "food",
+        "per_diem"
+      ],
+      "limit_usd": 75,
+      "limit_kind": "per_day",
+      "document_id": "POL-005",
+      "section_id": "3.2",
+      "source_text": "Meals are reimbursed up to $75 per day domestically"
+    },
+    "meals_international": {
+      "description": "Meals while travelling, outside the United States",
+      "aliases": [
+        "meals_international"
+      ],
+      "limit_usd": 110,
+      "limit_kind": "per_day",
+      "document_id": "POL-005",
+      "section_id": "3.2",
+      "source_text": "$110 per day internationally, including tip"
+    }
+  },
+  "expense_global": {
+    "pre_approval_above_usd": 1000,
+    "pre_approval_document_id": "POL-005",
+    "pre_approval_section_id": "1",
+    "receipt_required_from_usd": 25,
+    "receipt_document_id": "POL-005",
+    "receipt_section_id": "4"
+  },
+  "pto": {
+    "manager_approval_from_days": 3,
+    "document_id": "POL-001",
+    "section_id": "3.1",
+    "source_text": "Requests of 3 days or more require manager approval before the time is taken",
+    "escalation_review_above_days": 10,
+    "escalation_document_id": "POL-001",
+    "escalation_section_id": "3.1"
+  },
+  "remote_work": {
+    "international_approval_after_days": 30,
+    "document_id": "POL-003",
+    "section_id": "4.3"
+  },
+  "availability": {
+    "manager_approval_from_days": 3,
+    "escalation_review_above_days": 10,
+    "department_approval_above_usd": 1000,
+    "worker_type": "contractor",
+    "document_id": "POL-018",
+    "section_id": "5",
+    "source_text": "Overtime must be approved in advance by the manager"
+  },
+  "purchase_route": {
+    "above_usd": 150,
+    "route": "IT_PURCHASE_ORDER",
+    "document_id": "POL-010",
+    "section_id": "8",
+    "source_text": "Items above $150 are purchased by IT on a purchase order"
+  },
+  "licence_route": {
+    "route": "IT_LICENCE",
+    "document_id": "POL-010",
+    "section_id": "10",
+    "source_text": "Only software on the approved list may be installed on a company device"
+  }
+}

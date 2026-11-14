@@ -13,3 +13,4 @@ __pycache__/
 *.egg-info/
 frontend/dist/
 frontend/node_modules/
+.idea/

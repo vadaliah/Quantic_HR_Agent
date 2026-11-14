@@ -52,8 +52,49 @@ Approved holiday work is compensated at the employee's regular rate plus a
 substitute day off, taken within 60 days. Holiday work is not paid at a premium
 rate unless a site-specific agreement provides one.
 
-## 5. Office Closure Between Holidays
+## 5. Blackout Dates
+
+A blackout date is a date on which time off is restricted because of business
+demand. Blackout dates are set by the department director, published at least
+**60 days** in advance, and may not exceed **10 working days** in a calendar
+year.
+
+A request under POL-001 that covers a blackout date requires manager approval
+regardless of its length. Blackout dates do not affect sick leave, bereavement
+leave, or any leave taken under POL-008.
+
+The following periods are standing blackout dates for Finance and Customer
+Operations:
+
+| Period | Function |
+| --- | --- |
+| Last five working days of each quarter | Finance |
+| The two weeks around a major release | Engineering |
+| 20 December to 2 January | Customer Operations |
+
+## 6. Regional Offices
+
+Where a local public holiday is not on the table in section 1, an office may
+observe the local holiday instead of the nearest company holiday. The local
+schedule is published by People Operations and does not increase the annual
+entitlement in section 1.
+
+An employee who transfers between offices mid-year takes the holiday schedule of
+the new office from the date of transfer.
+
+## 7. Office Closure Between Holidays
 
 When a holiday falls on a Tuesday or Thursday, the adjacent Monday or Friday is
 not an automatic closure. Employees who wish to take the adjacent day should use
 PTO under POL-001 or a floating holiday.
+
+## 8. Holiday Pay and Premiums
+
+Holiday pay is calculated on the employee's base rate and is not included in
+overtime calculations. An employee who is on approved unpaid leave on the date of
+a holiday is not paid for that holiday.
+
+## 9. Questions
+
+Contact People Operations at people-ops@acme.example for holiday scheduling
+questions. Questions about accrual or carryover are answered under POL-001.
