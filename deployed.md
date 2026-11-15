@@ -6,7 +6,7 @@ Health: https://quantic-hr-agent-dcw4.onrender.com/health
 
 Companion group repository (Apex People AI): https://github.com/meghnadesaii/apex-people-ai — live at https://apex-people-ai.onrender.com/.
 
-The running code is branch `fix/bedrock-wiring-2026-11-11`. The default branch `main` may lag it.
+Clone the default branch, `main`. It is the source of truth for this repository.
 
 The service serves the UI and API and reads the existing `QuanticHrAgentStack` Aurora
 database (`quantic_hr_agent`, us-east-2) through the RDS Data API. Bedrock provides chat

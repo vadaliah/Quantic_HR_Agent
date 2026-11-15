@@ -42,7 +42,7 @@ Browser → Render web service (React UI + FastAPI /chat, LangGraph tool loop, s
 - Public tables: `agent_runs`, `benefits`, `employees`, `locations`, `managers`, `policy_chunks`, `policy_documents`, `pto_accruals`, `pto_balances`, `pto_blackouts`, `tickets`.
 - `employees`: 25 rows, IDs `E1001`–`E1025`. `pto_accruals`: 25 rows. `pto_balance_as_of()` exists (1 row in `pg_proc`). pgvector 0.8.0.
 - `policy_documents`: 16. `policy_chunks`: 173, **all 173 with an embedding**, all 1024 dimensions. This matches Titan v2, so vector retrieval works without any ingest.
-- Note: the live database holds 16 documents / 173 chunks, while this branch's `corpus/` has 12 documents / 134 chunks. The live data was loaded separately; do not re-ingest from this branch without Hiren's go.
+- Note: a read-only check on 12 Nov 2026 recorded the live database as 16 documents / 173 chunks. This branch's `corpus/` now has 35 policy files / 312 dry-run chunks (30 base POL-IDs `POL-001`–`POL-030` plus 5 annexes; about 20,077 words). The live data was loaded separately; do not re-ingest from this branch without Hiren's go.
 
 Unchanged: Hiren's `QuanticHrAgentStack` is untouched (deletion protection on, snapshot
 `quantic-hr-agent-pre-update-20261111-2326`). The ECR image was deleted. There was no `cdk deploy`.

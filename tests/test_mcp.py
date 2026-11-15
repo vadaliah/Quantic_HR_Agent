@@ -29,6 +29,49 @@ def _payload(result) -> object:
 
 
 @pytest.mark.asyncio
+async def test_mcp_lists_eight_tools_without_database() -> None:
+    """Start the stdio MCP server and assert list_tools, with no database or AWS.
+
+    The two tests below still need a seeded Postgres and are skipped in CI.
+    This test only calls list_tools, so it must run in the offline workflow.
+    """
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {
+            "CLUSTER_ARN",
+            "SECRET_ARN",
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_SESSION_TOKEN",
+            "DATABASE_URL",
+        }
+    }
+    env.update({
+        "PYTHONPATH": str(ROOT / "src"),
+        "DATABASE_URL": "postgresql://ci-dummy@127.0.0.1:1/ci_dummy",
+        "QUANTIC_AGENT_MODE": "keyword",
+        "QUANTIC_RETRIEVAL": "keyword",
+        "AWS_REGION": "us-east-2",
+    })
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "quantic_hr.mcp_server"],
+        env=env,
+        cwd=str(ROOT),
+    )
+    async with stdio_client(params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            listed = await session.list_tools()
+            names = {tool.name for tool in listed.tools}
+            assert REQUIRED_TOOLS <= names
+            compliance = next(tool for tool in listed.tools if tool.name == "check_policy_compliance")
+            properties = (compliance.inputSchema or {}).get("properties") or {}
+            assert "days_requested" in properties
+
+
+@pytest.mark.asyncio
 async def test_mcp_discovery_and_calls(database_url: str) -> None:
     params = StdioServerParameters(
         command=sys.executable,

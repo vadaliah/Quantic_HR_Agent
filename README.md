@@ -8,9 +8,9 @@ Agentic RAG + MCP project for Quantic AI Engineering Techniques and Architecture
 
 **Companion group repository (Apex People AI):** https://github.com/meghnadesaii/apex-people-ai — live at https://apex-people-ai.onrender.com/. Apex is the shared group repo for the same assignment brief, on a different stack.
 
-**Architecture views:** [current architecture](presentation/hiren-quantic-hr-agent.architecture-2026-11-15.html), [live/target architecture v4](presentation/hiren-target-architecture-2026-11-15-v4.html), and [comparison with Apex People AI](presentation/apex-vs-hiren.architecture-2026-11-15.html). PNG previews and a short index are in [presentation/README.md](presentation/README.md).
+**Architecture views:** [current architecture](docs/architecture/hiren-quantic-hr-agent.architecture-2026-11-15.html), [live/target architecture v4](docs/architecture/hiren-target-architecture-2026-11-15-v4.html), and [comparison with Apex People AI](presentation/apex-vs-hiren.architecture-2026-11-15.html). PNG previews and a short index are in [docs/architecture/README.md](docs/architecture/README.md) and [presentation/README.md](presentation/README.md).
 
-The code running on Render is this branch, `fix/bedrock-wiring-2026-11-11`. The default branch `main` may lag it; graders should use this branch (or the live URL), not assume `main` is the deployed revision.
+Clone the default branch, `main`. It is the source of truth for this repository. The live URL is listed above.
 
 **Cold starts:** Render Free can sleep after inactivity, and Aurora Serverless v2 can auto-pause. A public `GET /health` on 15 Nov 2026 at 15:11 CET (Europe/Berlin) took 42.4 seconds (consistent with a cold start). That is a health-check time, not chat latency. Warm `/health` and `/chat` times are documented in `design-and-evaluation.md` and `deployed.md`. This documentation update did not call live `/chat`.
 
@@ -19,11 +19,11 @@ The code running on Render is this branch, `fix/bedrock-wiring-2026-11-11`. The 
 
 Interactive Archify diagrams for this submission (15 November 2026):
 
-- [Current Quantic HR Agent architecture](presentation/hiren-quantic-hr-agent.architecture-2026-11-15.html) — [PNG preview](presentation/hiren-quantic-hr-agent-2026-11-15-full.png)
-- [Live / target architecture (v4)](presentation/hiren-target-architecture-2026-11-15-v4.html) — [PNG preview](presentation/hiren-target-architecture-2026-11-15-v4.png)
+- [Current Quantic HR Agent architecture](docs/architecture/hiren-quantic-hr-agent.architecture-2026-11-15.html) — [PNG preview](docs/architecture/hiren-quantic-hr-agent-2026-11-15-full.png)
+- [Live / target architecture (v4)](docs/architecture/hiren-target-architecture-2026-11-15-v4.html) — [PNG preview](docs/architecture/hiren-target-architecture-2026-11-15-v4.png)
 - [Comparison with Apex People AI](presentation/apex-vs-hiren.architecture-2026-11-15.html) — [PNG preview](presentation/apex-vs-hiren-2026-11-15-full.png)
 
-See [presentation/README.md](presentation/README.md). These views contain no access codes, keys, or tokens.
+See [docs/architecture/README.md](docs/architecture/README.md) and [presentation/README.md](presentation/README.md). These views contain no access codes, keys, or tokens.
 
 ## Where the data lives
 
@@ -120,8 +120,11 @@ always use the admin secret.
 
 ## Corpus ingestion (RAG)
 
-`corpus/` holds 12 policy documents, POL-001 to POL-012 (~5,600 words; POL-006 and POL-011
-are in `corpus/sources/`). `corpus/SOURCES.md` is provenance, not a policy, and is not ingested.
+`corpus/` holds 35 policy files: 30 base policies (`POL-001` … `POL-030`) and 5 annexes
+(`POL-001A`, `POL-002A`, `POL-005A`, `POL-006A`, `POL-009A`). That is 20,077 words, or
+roughly 40–67 pages at 500–300 words per page. `POL-006` and `POL-011` live under
+`corpus/sources/` and are still discovered by `scripts/ingest_corpus.py` (`rglob("POL-*")`).
+`corpus/SOURCES.md` is provenance, not a policy, and is not ingested.
 Until ingestion has run, `policy_chunks` is empty and policy questions return
 "no matching passage" — that is the correct answer against an empty index, not a bug.
 
@@ -132,8 +135,9 @@ uv run python scripts/ingest_corpus.py                    # embed with Titan v2 
 uv run python scripts/ingest_corpus.py --skip-embeddings  # text only (keyword search), no AWS
 ```
 
-`--dry-run` reports 12 documents and 134 chunks (one per numbered section) and an estimate
-of about 9,200 tokens, well under one cent of Titan v2 embedding, one time. Chunk IDs are
+`--dry-run` (15 Nov 2026, no AWS and no database write) reports 35 documents and 312 chunks
+(one per numbered section, with a split only when a section exceeds the size bound) and an
+estimate of about 29,900 tokens. Chunk IDs are
 `<document>:<section>` (for example `POL-001:2.1`), so re-running updates rows in place;
 unchanged text keeps its embedding (`content_sha`), sections removed from a document are
 deleted, and `--force` re-embeds everything.
@@ -162,12 +166,12 @@ npm --prefix frontend run dev
 uv run pytest -q
 ```
 
-The pre-existing suite has 24 tests under `tests/`. `tests/test_eval_scoring.py` adds offline scorer tests (12 cases) that need no database. No test calls AWS: Bedrock is replaced by a fake client (`tests/fakes.py`).
+The suite under `tests/` has 37 tests. No test calls AWS: Bedrock is replaced by a fake client (`tests/fakes.py`). A local offline run on this branch (15 Nov 2026, no database) reported **21 passed, 16 skipped**.
 
-**Why some tests are skipped.** Fixtures in `tests/conftest.py` skip (they do not fail) when a seeded local Postgres is unreachable, so the GitHub Actions `app` workflow can still run the offline suite. On the deploy-branch tip (`f95840c`, 14 Nov 2026) that workflow reported **8 passed, 16 skipped**:
+**Why some tests are skipped.** Fixtures in `tests/conftest.py` skip (they do not fail) when a seeded local Postgres is unreachable, so the GitHub Actions `app` workflow can still run the offline suite.
 
-- Always run (no database): `tests/test_bedrock.py` (6), `tests/test_ping.py` (1), and `test_mode_selection` in `tests/test_agent_converse.py` (1). The new `tests/test_eval_scoring.py` is also offline and needs no database.
-- Skipped in CI and on any machine without `DATABASE_URL` pointing at a reachable, seeded Postgres (migrations 001–006 and seed applied; default URL `postgresql://quantic@127.0.0.1:5433/quantic_hr_agent`): the remaining tests in `test_agent_converse.py`, all of `test_agent_and_bff.py`, both tests in `test_mcp.py` (including MCP discovery and a live tool call), and all of `test_retrieval.py`. The policy-search tests also require `policy_chunks` to be loaded.
+- Always run (no database): `tests/test_bedrock.py` (6), `tests/test_ping.py` (1), `test_mode_selection` in `tests/test_agent_converse.py` (1), `tests/test_eval_scoring.py` (12), and `test_mcp_lists_eight_tools_without_database` in `tests/test_mcp.py` (1).
+- Skipped in CI and on any machine without `DATABASE_URL` pointing at a reachable, seeded Postgres (migrations 001–006 and seed applied; default URL `postgresql://quantic@127.0.0.1:5433/quantic_hr_agent`): the remaining tests in `test_agent_converse.py`, all of `test_agent_and_bff.py`, the two database-backed tests in `test_mcp.py` (a live tool call and a policy-search call), and all of `test_retrieval.py`. The policy-search tests also require `policy_chunks` to be loaded. `test_mcp_lists_eight_tools_without_database` does not need a database and runs in CI.
 
 **How to run the skipped tests locally** (does not touch the deployed Aurora database):
 
@@ -179,9 +183,7 @@ export DATABASE_URL=postgresql://quantic@127.0.0.1:5433/quantic_hr_agent
 uv run pytest -q
 ```
 
-To run only the offline suite, leave `DATABASE_URL` unset or pointing at an unreachable host; pytest will skip the 16 database-backed tests and still run the others.
-
-`tests/test_mcp.py` currently asserts a required set of six tool names. The server now exposes eight tools (it also has `lookup_benefits_status` and `create_mock_hr_ticket`). The extra two are not missing from the server; they are simply not in that test's `REQUIRED_TOOLS` set. This PR does not change that assertion.
+To run only the offline suite, leave `DATABASE_URL` unset or pointing at an unreachable host; pytest will skip the database-backed tests and still run the others, including the database-free MCP `list_tools` check. `tests/test_mcp.py` asserts all eight tool names (`search_policy_documents`, `get_policy_section`, `lookup_employee_profile`, `check_pto_balance`, `check_policy_compliance`, `draft_hr_email`, `lookup_benefits_status`, and `create_mock_hr_ticket`).
 
 ## Demo workflows
 

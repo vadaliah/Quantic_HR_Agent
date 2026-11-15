@@ -15,3 +15,5 @@ The files were checked before they were added: they contain no access codes, cre
 | Target architecture v4 (15 Nov 2026, live) | [hiren-target-architecture-2026-11-15-v4.html](hiren-target-architecture-2026-11-15-v4.html) | [hiren-target-architecture-2026-11-15-v4.png](hiren-target-architecture-2026-11-15-v4.png) |
 
 GitHub renders the PNG files inline. The HTML files are self-contained; download them and open them locally. They are not served as GitHub Pages from this repository.
+
+The Apex People AI comparison view is only in [`presentation/`](../../presentation/README.md); it is not duplicated here.

@@ -4,7 +4,7 @@ Quantic HR Agent — an agentic RAG system over Acme Corp HR policy, deployed on
 Render and answered through Amazon Bedrock.
 
 - Deployed URL: https://quantic-hr-agent-dcw4.onrender.com
-- Branch: `fix/bedrock-wiring-2026-11-11`
+- Branch to clone: `main`
 - Region: AWS `us-east-2`; Render free tier, Ohio
 
 ---
@@ -47,7 +47,7 @@ The layers the brief asks to be distinguishable — web app, agent orchestration
 MCP client/server, RAG index, mock data, LLM provider — are separated by module,
 not by convention: `bff.py` (web), `agent.py` (orchestration + MCP client),
 `mcp_server.py` (MCP server + tool schemas), `tools.py` (RAG and data access),
-`db.py` (storage), `bedrock.py` (provider). A component diagram is in `docs/`
+`db.py` (storage), `bedrock.py` (provider). A component diagram is in `docs/architecture/`
 (Archify export).
 
 ### Why the Data API rather than psycopg
@@ -76,18 +76,25 @@ differences are absorbed inside `db.py`:
 
 ### Corpus
 
-Sixteen policy documents in three formats (Markdown, HTML, PDF-derived text), so
-the ingester is exercised on more than one parser.
+Thirty-five policy files in Markdown and HTML, so the ingester is exercised on
+more than one parser. Counted from `corpus/` on 15 Nov 2026 (a `--dry-run` of
+`scripts/ingest_corpus.py`: no AWS call and no database write):
 
-- Documents: 16 (`POL-001` … `POL-012`, plus annexes `001A`, `002A`, `005A`, `006A`)
-- Chunks: **173**, all embedded at 1024 dimensions
-- Topics: PTO and sick leave, holidays, remote and hybrid work, international and
-  cross-state work, expenses, information security, benefits, leave of absence,
-  onboarding, equipment, code of conduct, HR escalation
+- Files: 35 policy documents. `POL-006` and `POL-011` live under
+  `corpus/sources/` and are still discovered by the ingester (`rglob("POL-*")`).
+  `corpus/SOURCES.md` is provenance, not a policy, and is not ingested.
+- POL-IDs: 30 base policies (`POL-001` … `POL-030`) and 5 annexes (`POL-001A`,
+  `POL-002A`, `POL-005A`, `POL-006A`, `POL-009A`)
+- Words / pages: 20,077 words, or roughly 40–67 pages at 500–300 words per page,
+  which falls inside the brief's 30–120 page range
+- Chunks in this tree: **312** (dry-run). A read-only check of the live index on
+  12 Nov 2026 recorded 16 documents / 173 embedded chunks; that ingest has not
+  been repeated here and must not be, without Hiren's go.
 
-**Known shortfall.** The brief asks for 30–120 pages; the corpus is roughly 11–22
-pages depending on words-per-page assumptions. This is the largest unmet
-requirement and is recorded rather than padded.
+Topics now also include recruitment, performance, travel, health and safety,
+privacy, payroll, working hours, contractors, business continuity, learning,
+relocation, AI-tool use, grievance, records retention, employee relations,
+intellectual property, and workplace accommodation.
 
 ### Chunking
 
@@ -426,13 +433,19 @@ Three items the brief names are absent, and are recorded here rather than implie
 
 ### Task A — remote work from another country
 
-**Question:** "Can I work from Portugal for six weeks?" · **Employee:** E1011
+**Question:** "Can I work from Portugal for six weeks?" · **Employee:** E1007
+
+The UI preset "Remote work abroad" and the default session employee are `E1007`
+(`frontend/src/App.jsx`; also `DEFAULT_EMPLOYEE_ID` in `src/quantic_hr/agent.py`).
+`E1007` is a remote-eligible Senior Software Engineer in New York (`mock_data/employees.json`).
+`E1011` is a valid remote-eligible employee too and is still the employee id on
+eval items Q09/Q10; it is not the on-screen demo identity.
 
 ```
 1. search_policy_documents
      {"query": "remote work abroad"}
 2. check_policy_compliance
-     {"employee_id": "E1011", "destination_region": "PT", "check_type": "remote_work"}
+     {"employee_id": "E1007", "destination_region": "PT", "check_type": "remote_work"}
 ```
 
 **Result:** "Working from Portugal for six weeks is not compliant with the remote
@@ -478,7 +491,7 @@ check establishes the approval requirement.
 |---|---|
 | `test_tool_contract.py` | Every MCP wrapper matches its `tools.py` signature; defaults agree; docstrings carry Args/Returns and a when-to-call line; the write tool documents confirmation; units are days, not hours |
 | `test_agent_and_bff.py` | Endpoint contracts and agent behaviour |
-| `test_mcp.py` | Starts the real stdio server and calls a tool over the protocol |
+| `test_mcp.py` | Starts the real stdio server; a database-free test asserts `list_tools` returns all eight names, and two further tests call tools when a seeded database is available |
 
 `test_tool_contract.py` exists because of a specific failure: the PTO tool moved
 from `requested_hours` to `days_requested`, the wrapper was not updated, and the
@@ -491,10 +504,10 @@ defect without a database.
 and `npm ci && npm run build` for the frontend. The `infrastructure` workflow runs
 the CDK jest suite.
 
-**Known gap.** The MCP discovery test needs a database and skips in CI, so no MCP
-call currently runs there. A database-free discovery assertion — list tools,
-assert the eight names and that `check_policy_compliance` takes `days_requested` —
-would close it without infrastructure.
+The database-free discovery test starts the stdio MCP server, calls `list_tools`,
+and asserts the eight tool names, including that `check_policy_compliance` accepts
+`days_requested`. It runs in CI without a database or AWS. The two tests that
+call tools still skip unless a seeded Postgres is reachable.
 
 ---
 
