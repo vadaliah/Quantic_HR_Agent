@@ -234,13 +234,8 @@ citations in about 14 s. Still to do: the AWS Budget alert. Do not run `cdk depl
 - **Teardown after grading:** delete the IAM access key (or user) and suspend or delete the
   Render service. The Aurora cluster is Hiren's and stays as is.
 
-## Presentation
-
-The Quantic presentation slide PDF will be added under [`docs/presentation/`](docs/presentation/) once a notes-free export is ready. See that folder's README. No slide file is included yet; speaker notes and access codes must not be committed there.
-
 ## Docs
 - [Architecture views](docs/architecture/)
-- [Presentation materials (placeholder)](docs/presentation/)
 - [Deploy on Render](docs/DEPLOY_RENDER.md)
 - [Cost-first strategy](docs/COST_FIRST_DELIVERY_STRATEGY.md)
 - [Master plan](docs/MASTER_PLAN.md)
