@@ -23,7 +23,7 @@ Usage:
     python3 evaluation/run_eval.py --limit 5        # first five
     python3 evaluation/run_eval.py --id Q09 Q14     # named cases
     python3 evaluation/run_eval.py --fresh-thread   # one thread per question
-    python3 evaluation/run_eval.py --rescore        # re-score saved results; no /chat calls
+    python3 evaluation/run_eval.py --rescore        # re-score citations and routes; no /chat calls
 
 The API must be running. bash scripts/app.sh status will tell you.
 """
@@ -41,6 +41,14 @@ from pathlib import Path
 
 BASE = "http" + "://" + "127.0.0.1" + ":8000"
 ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from quantic_hr.compliance_route import (
+    canonicalize_route,
+    route_from_compliance_payloads,
+)
 EVAL_SET = ROOT / "evaluation" / "eval_set.jsonl"
 RESULTS = ROOT / "evaluation" / "results"
 TRANSCRIPTS = RESULTS / "transcripts"
@@ -111,25 +119,12 @@ def score(case: dict, payload: dict, latency_ms: int) -> dict:
     answer = (payload.get("answer") or "")
     answer_lower = answer.lower()
 
-    # The route is the compliance tool's own output. The Bedrock path emits only
-    # tool_call steps, never a "decision" step, so reading the route from steps
-    # left it None on every case and route accuracy read 0.0 regardless of what
-    # the agent did.
-    route = None
-    for t in payload.get("tool_trace", []) or []:
-        if t.get("name") != "check_policy_compliance" or t.get("is_error"):
-            continue
-        result = t.get("result")
-        if isinstance(result, str):
-            try:
-                result = json.loads(result)
-            except ValueError:
-                result = None
-        if isinstance(result, dict) and result.get("route"):
-            route = result["route"]
-    if route is None:
-        decision = next((s for s in steps if s.get("kind") == "decision"), None)
-        route = (decision or {}).get("detail")
+    # The route comes from check_policy_compliance. Prefer an explicit
+    # vocabulary `route` on the tool result; if a saved trace omits it
+    # (the 14 Nov 2026 run), derive it from structured fields. Legacy
+    # decision-step labels such as INSUFFICIENT are not used unless they
+    # already match the gold vocabulary.
+    route = route_from_records(payload)
     clarification = next((s for s in steps if s.get("kind") == "clarification"), None)
 
     got_cites = {_norm_doc(c.get("citation") or
@@ -355,8 +350,38 @@ def write_summary(rows: list[dict], summary: dict) -> Path:
     return path
 
 
+def compliance_outputs(record: dict) -> list[object]:
+    """Collect check_policy_compliance payloads from a live /chat payload or a saved row."""
+    outputs: list[object] = []
+    for item in record.get("tool_trace") or []:
+        if item.get("name") != "check_policy_compliance" or item.get("is_error"):
+            continue
+        outputs.append(item.get("result"))
+    for item in record.get("tool_io") or []:
+        if item.get("name") != "check_policy_compliance":
+            continue
+        outputs.append(item.get("output_summary"))
+    return outputs
+
+
+def route_from_records(record: dict) -> str | None:
+    route = route_from_compliance_payloads(compliance_outputs(record))
+    if route:
+        return route
+    decision = next((step for step in (record.get("steps") or []) if step.get("kind") == "decision"), None)
+    return canonicalize_route((decision or {}).get("detail"))
+
+
+def _route_ok(expected_route: object, route: str | None) -> bool | None:
+    if not expected_route:
+        return None
+    if not route:
+        return False
+    return route.strip().lower() == str(expected_route).strip().lower()
+
+
 def rescore_existing(results_path: Path) -> list[dict]:
-    """Re-apply citation scoring to a saved results.jsonl without calling /chat."""
+    """Re-apply citation and route scoring to a saved results.jsonl without calling /chat."""
     cases = {case["id"]: case for case in load_set()}
     rows = [json.loads(line) for line in results_path.read_text().splitlines() if line.strip()]
     for row in rows:
@@ -370,6 +395,10 @@ def rescore_existing(results_path: Path) -> list[dict]:
         row["citation_accuracy"] = (
             round(len(gold & got) / len(gold), 3) if gold else None
         )
+        expected_route = case.get("expected_route")
+        row["expected_route"] = expected_route
+        row["route"] = route_from_records(row)
+        row["route_ok"] = _route_ok(expected_route, row["route"])
     return rows
 
 
@@ -383,7 +412,7 @@ def main() -> int:
         "--rescore",
         nargs="?",
         const=str(RESULTS / "results.jsonl"),
-        help="Re-score citation accuracy from a saved results.jsonl; does not call /chat",
+        help="Re-score citation and route accuracy from a saved results.jsonl; does not call /chat",
     )
     args = parser.parse_args()
 
@@ -394,22 +423,42 @@ def main() -> int:
             return 1
         rows = rescore_existing(results_path)
         RESULTS.mkdir(parents=True, exist_ok=True)
+        TRANSCRIPTS.mkdir(parents=True, exist_ok=True)
         with results_path.open("w") as handle:
             for row in rows:
                 handle.write(json.dumps(row) + "\n")
         scored = [row for row in rows if row.get("latency_ms") is not None]
+        for row in scored:
+            write_transcript(row)
         summary = aggregate(scored)
         summary_path = write_summary(scored, summary)
         note = (
             "Citation identifiers were re-scored on 15 Nov 2026 (Europe/Berlin) "
-            "with the corrected `_norm_doc` helper. The underlying traces were "
-            "not re-run against `/chat`.\n\n"
+            "with the corrected `_norm_doc` helper. Routes were re-derived on "
+            "the same date from saved `check_policy_compliance` tool output "
+            "(explicit `route` when present, otherwise structured fields). "
+            "The underlying traces were not re-run against `/chat`.\n\n"
         )
         body = summary_path.read_text()
-        if not body.startswith("Citation identifiers were re-scored"):
-            # Insert the note after the title line.
-            parts = body.split("\n", 1)
-            summary_path.write_text(parts[0] + "\n\n" + note + (parts[1].lstrip("\n") if len(parts) > 1 else ""))
+        # Replace a previous citation-only note, or insert after the title.
+        marker = "Citation identifiers were re-scored"
+        if marker in body:
+            # Keep a single leading note after the title.
+            rest = body.split("\n", 1)[1] if "\n" in body else ""
+            # Drop the old one-paragraph note if it is still at the top.
+            if rest.lstrip().startswith(marker):
+                # skip until the first blank line after that paragraph, then
+                # skip following blank lines.
+                lines = rest.lstrip().splitlines()
+                i = 0
+                while i < len(lines) and lines[i].strip():
+                    i += 1
+                while i < len(lines) and not lines[i].strip():
+                    i += 1
+                rest = "\n".join(lines[i:])
+                body = body.split("\n", 1)[0] + "\n\n" + rest
+        parts = body.split("\n", 1)
+        summary_path.write_text(parts[0] + "\n\n" + note + (parts[1].lstrip("\n") if len(parts) > 1 else ""))
         print(json.dumps({k: summary[k] for k in (
             "questions", "citation_accuracy", "tool_selection_accuracy",
             "route_accuracy", "workflow_completion_rate", "behaviour_accuracy",

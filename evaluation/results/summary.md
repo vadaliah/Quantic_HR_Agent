@@ -1,6 +1,6 @@
 # Evaluation Results
 
-Citation identifiers were re-scored on 15 Nov 2026 (Europe/Berlin) with the corrected `_norm_doc` helper. The underlying traces were not re-run against `/chat`.
+Citation identifiers were re-scored on 15 Nov 2026 (Europe/Berlin) with the corrected `_norm_doc` helper. Routes were re-derived on the same date from saved `check_policy_compliance` tool output (explicit `route` when present, otherwise structured fields). The underlying traces were not re-run against `/chat`.
 
 Questions run: **30**
 
@@ -10,7 +10,7 @@ Questions run: **30**
 | --- | --- |
 | citation accuracy | 0.591 |
 | tool selection accuracy | 0.886 |
-| route accuracy | 0.0 |
+| route accuracy | 0.5 |
 | workflow completion rate | 0.933 |
 | behaviour accuracy | 0.767 |
 | groundedness | 1.0 |
@@ -25,24 +25,22 @@ Questions run: **30**
 | Category | n | Citation acc. | Route acc. | Behaviour |
 | --- | --- | --- | --- | --- |
 | ambiguous | 4 | None | None | 0.25 |
-| multi_document | 7 | 0.5 | 0.0 | 0.857 |
+| multi_document | 7 | 0.5 | 1.0 | 0.857 |
 | out_of_scope | 4 | None | None | 0.25 |
 | simple_policy | 8 | 0.75 | None | 1.0 |
-| tool_requiring | 7 | 0.5 | 0.0 | 1.0 |
+| tool_requiring | 7 | 0.5 | 0.429 | 1.0 |
 
 ## Failures worth fixing
 
 - **Q06** — no gold document cited
 - **Q08** — no gold document cited
-- **Q09** — route expected `PEOPLE_OPS_AND_LEGAL_APPROVAL`, got `None`; missing tools ['search_policy_documents']; no gold document cited
+- **Q09** — missing tools ['search_policy_documents']; no gold document cited
 - **Q10** — behaviour expected `answer_with_escalation`; no gold document cited
 - **Q11** — missing tools ['lookup_benefits_status']
 - **Q13** — no gold document cited
-- **Q14** — route expected `MANAGER_APPROVAL`, got `INSUFFICIENT`; no gold document cited
-- **Q15** — route expected `INSUFFICIENT_BALANCE`, got `INSUFFICIENT`
+- **Q14** — no gold document cited
 - **Q16** — route expected `NEEDS_PRE_APPROVAL`, got `None`; missing tools ['check_policy_compliance']; no gold document cited
-- **Q17** — route expected `CLAIM_WITH_RECEIPT`, got `INSUFFICIENT`; no gold document cited
-- **Q18** — route expected `NOT_ELIGIBLE`, got `None`
+- **Q17** — route expected `CLAIM_WITH_RECEIPT`, got `CANNOT_DETERMINE`; no gold document cited
 - **Q19** — route expected `CLAIM_WITH_RECEIPT`, got `None`; missing tools ['check_policy_compliance']; planning error
 - **Q20** — route expected `PARTIAL_UP_TO_LIMIT`, got `None`; missing tools ['check_policy_compliance']; planning error
 - **Q22** — behaviour expected `clarify`
@@ -62,22 +60,22 @@ Questions run: **30**
 - Q06 [simple_policy] route=`None` cite=0.0 tools=3 16057ms
 - Q07 [simple_policy] route=`None` cite=1.0 tools=2 12033ms
 - Q08 [simple_policy] route=`None` cite=0.0 tools=1 10128ms
-- Q09 [multi_document] route=`None` cite=0.0 tools=3 9936ms
-- Q10 [multi_document] route=`None` cite=0.0 tools=3 14681ms
+- Q09 [multi_document] route=`PEOPLE_OPS_AND_LEGAL_APPROVAL` cite=0.0 tools=3 9936ms
+- Q10 [multi_document] route=`PEOPLE_OPS_AND_LEGAL_APPROVAL` cite=0.0 tools=3 14681ms
 - Q11 [multi_document] route=`None` cite=1.0 tools=3 13443ms
 - Q12 [multi_document] route=`None` cite=1.0 tools=7 26606ms
 - Q13 [multi_document] route=`CLAIM_WITH_RECEIPT` cite=0.0 tools=5 28824ms
-- Q14 [tool_requiring] route=`INSUFFICIENT` cite=0.0 tools=3 14018ms
-- Q15 [tool_requiring] route=`INSUFFICIENT` cite=1.0 tools=4 16957ms
+- Q14 [tool_requiring] route=`MANAGER_APPROVAL` cite=0.0 tools=3 14018ms
+- Q15 [tool_requiring] route=`INSUFFICIENT_BALANCE` cite=1.0 tools=4 16957ms
 - Q16 [tool_requiring] route=`None` cite=0.0 tools=2 15021ms
-- Q17 [tool_requiring] route=`INSUFFICIENT` cite=0.0 tools=3 23720ms
-- Q18 [tool_requiring] route=`None` cite=1.0 tools=2 10800ms
+- Q17 [tool_requiring] route=`CANNOT_DETERMINE` cite=0.0 tools=3 23720ms
+- Q18 [tool_requiring] route=`NOT_ELIGIBLE` cite=1.0 tools=2 10800ms
 - Q19 [tool_requiring] route=`None` cite=1.0 tools=1 9267ms
 - Q20 [tool_requiring] route=`None` cite=0.5 tools=3 15749ms
 - Q21 [ambiguous] route=`None` cite=None tools=0 941ms
 - Q22 [ambiguous] route=`None` cite=None tools=3 15765ms
-- Q23 [ambiguous] route=`None` cite=None tools=6 22938ms
-- Q24 [ambiguous] route=`None` cite=None tools=4 14746ms
+- Q23 [ambiguous] route=`SELF_SERVICE` cite=None tools=6 22938ms
+- Q24 [ambiguous] route=`MANAGER_APPROVAL` cite=None tools=4 14746ms
 - Q25 [out_of_scope] route=`None` cite=None tools=0 917ms
 - Q26 [out_of_scope] route=`None` cite=None tools=0 3173ms
 - Q27 [out_of_scope] route=`None` cite=None tools=4 19457ms

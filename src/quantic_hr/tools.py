@@ -6,6 +6,7 @@ from datetime import date, datetime
 from typing import Any
 
 from quantic_hr import bedrock
+from quantic_hr.compliance_route import canonicalize_route, derive_route
 from quantic_hr.db import connection
 
 HOURS_PER_DAY = 8.0
@@ -540,7 +541,7 @@ def check_policy_compliance(
     profile = lookup_employee_profile(employee_id)
     if not profile.get("found"):
         return _not_checked(check_type, f"unknown employee {employee_id}")
-    return check(profile, {
+    result = check(profile, {
         "days_requested": days_requested,
         "amount": amount,
         "expense_category": expense_category,
@@ -548,6 +549,14 @@ def check_policy_compliance(
         "destination_region": destination_region,
         "duration_days": duration_days,
     })
+    # Additive: current check functions already set a vocabulary `route`.
+    # Fill it in only when missing or not in the gold vocabulary, so older
+    # call shapes still expose the field to the agent and the scorer.
+    if not canonicalize_route(result.get("route")):
+        derived = derive_route({key: value for key, value in result.items() if key != "route"})
+        if derived:
+            result["route"] = derived
+    return result
 
 
 BENEFITS_PATH = RULES_PATH.parent / "benefits.json"

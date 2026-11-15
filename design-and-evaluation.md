@@ -341,16 +341,29 @@ as different identifiers.
 
 On 15 Nov 2026 the committed 30-case traces were **re-scored offline** with the
 corrected helper (`python3 evaluation/run_eval.py --rescore`). No `/chat` call
-and no Bedrock or Aurora traffic was involved. After re-scoring, citation
-accuracy on that run is **0.591** (12 of 22 gold-labelled cases fully matched,
-two partial, eight still 0.0 because the traces cited a different section or
-none of the gold sections). Route accuracy remains **0.0** on that run for a
-separate reason that this change does not alter: several observed
-decision-step routes are `INSUFFICIENT` or `None` while the gold labels are
-values such as `INSUFFICIENT_BALANCE` or `MANAGER_APPROVAL`. That may be a
-route-vocabulary mismatch, a decision-step extraction issue, or a real
-behavioural miss; it is not obviously the same class of one-line scorer bug, so
-it is left unchanged.
+and no Bedrock or Aurora traffic was involved. After the citation re-score,
+citation accuracy on that run is **0.591** (12 of 22 gold-labelled cases fully
+matched, two partial, eight still 0.0 because the traces cited a different
+section or none of the gold sections).
+
+The same traces originally reported route accuracy **0.0**. That figure was
+mostly a scorer problem, not a finding that every routed task failed. The
+Bedrock path does not emit a `decision` step with a gold vocabulary label, and
+the 14 Nov 2026 tool payloads did not yet include a `route` field, so the
+scorer recorded `INSUFFICIENT` or `None`. `check_policy_compliance` on this
+branch now always returns a deterministic `route` in the eval-set vocabulary
+(`src/quantic_hr/compliance_route.py`). `--rescore` also derives that route
+offline from saved `tool_io` fields (`compliant`, `manager_approval_required`,
+`reason`, amounts, destinations) when `route` is missing. After that offline
+route re-score, route accuracy is **0.5** (4 of 8 gold-labelled cases). The
+four that match are Q09 (`PEOPLE_OPS_AND_LEGAL_APPROVAL`), Q14
+(`MANAGER_APPROVAL`; the tool and the answer were already right, but the old
+decision step said `INSUFFICIENT`), Q15 (`INSUFFICIENT_BALANCE`), and Q18
+(`NOT_ELIGIBLE`). The four that still fail are genuine misses and were not
+relabelled: Q16, Q19, and Q20 never called `check_policy_compliance` (the
+expense/pre-approval gold routes), and Q17 called it as `check_type=pto` with
+`requested_days=0` for a laptop question, which derives `CANNOT_DETERMINE`
+rather than the expense gold `CLAIM_WITH_RECEIPT`.
 
 The 25-case citation figure of 0.692 above was not recomputed.
 
