@@ -2,6 +2,12 @@
 
 Live: https://quantic-hr-agent-dcw4.onrender.com/ (Render free web service, 2026-11-12 ~00:58 CET, Europe/Berlin).
 
+Health: https://quantic-hr-agent-dcw4.onrender.com/health
+
+Companion group repository (Apex People AI): https://github.com/meghnadesaii/apex-people-ai — live at https://apex-people-ai.onrender.com/.
+
+The running code is branch `fix/bedrock-wiring-2026-11-11`. The default branch `main` may lag it.
+
 The service serves the UI and API and reads the existing `QuanticHrAgentStack` Aurora
 database (`quantic_hr_agent`, us-east-2) through the RDS Data API. Bedrock provides chat
 (Nova Pro) and embeddings (Titan v2). Steps and current checklist:
@@ -19,6 +25,8 @@ Smoke evidence (verified 2026-11-12 ~00:58 CET, Europe/Berlin):
 - `POST /chat` for E1007 "How many PTO days do I have left?" returned
   "10.9 PTO days left as of 2026-11-11 [POL-001 2.1]" via `check_pto_balance` in about 11 s.
 - The remote-work question answered `mode=bedrock` with POL-003 citations in about 14 s.
+
+Cold start (not a new chat measurement): a public `GET /health` on 15 Nov 2026 at 15:11 CET (Europe/Berlin) took 42.4 seconds and returned HTTP 200 with `runtime=data-api`, `database.ok` true, `mcp=stdio`, and `build=2026-11-15-abstain-fix`. That is consistent with a Render Free wake plus Aurora resume. This update did not call live `/chat`.
 
 Pending: AWS Budget alert.
 

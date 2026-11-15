@@ -302,7 +302,7 @@ database security group. `QUANTIC_ALLOW_AWS_DEPLOY=no` guards the deploy script.
 `evaluation/run_eval.py` drives `/chat`, records the full evidence trail per case
 (question, decision path, every MCP call with arguments and output, citations,
 route, latency) and writes `results.jsonl`, `summary.md` and one transcript per
-case. The dashboard at `/evaluation` reads the same file.
+case. `python3 evaluation/run_eval.py --rescore` re-applies citation scoring to a saved `results.jsonl` without calling `/chat`. The dashboard at `/evaluation` reads the same file.
 
 ### Results
 
@@ -321,6 +321,38 @@ Behaviour accuracy of 1.0 means every case did the right *kind* of thing —
 answered, refused or clarified — which is the guardrail requirement. Completion of
 1.0 means none hung or errored. The two gaps are citations (5 cases) and route
 (3).
+
+The table above is a **25-case** run recorded on the deployment branch. It is not
+the same artefact as `evaluation/results/summary.md`.
+
+### 30-case committed run and a scorer bug
+
+`evaluation/eval_set.jsonl` now has **30** cases (not 25). A later run of that
+set, committed in `evaluation/results/`, originally reported citation accuracy
+**0.0** and route accuracy **0.0**. The citation figure was a scorer bug, not a
+finding that no gold document was cited.
+
+`evaluation/run_eval.py` `_norm_doc` used to strip spaces only. Gold refs such as
+`POL-001 2.1` became `pol-0012.1`, while tool citations such as `POL-001 s2.1`
+became `pol-001s2.1`, so the sets never intersected. The helper now normalises
+both spellings (and `POL-001:2.1`, `POL-001s2.1`, `§`) to `pol-001:2.1`. Annex
+labels that genuinely differ (`POL-005A 5` vs `POL-005A sA.5`) are still treated
+as different identifiers.
+
+On 15 Nov 2026 the committed 30-case traces were **re-scored offline** with the
+corrected helper (`python3 evaluation/run_eval.py --rescore`). No `/chat` call
+and no Bedrock or Aurora traffic was involved. After re-scoring, citation
+accuracy on that run is **0.591** (12 of 22 gold-labelled cases fully matched,
+two partial, eight still 0.0 because the traces cited a different section or
+none of the gold sections). Route accuracy remains **0.0** on that run for a
+separate reason that this change does not alter: several observed
+decision-step routes are `INSUFFICIENT` or `None` while the gold labels are
+values such as `INSUFFICIENT_BALANCE` or `MANAGER_APPROVAL`. That may be a
+route-vocabulary mismatch, a decision-step extraction issue, or a real
+behavioural miss; it is not obviously the same class of one-line scorer bug, so
+it is left unchanged.
+
+The 25-case citation figure of 0.692 above was not recomputed.
 
 ### Latency
 
