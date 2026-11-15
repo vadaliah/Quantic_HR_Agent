@@ -86,8 +86,25 @@ def score(case: dict, payload: dict, latency_ms: int) -> dict:
     answer = (payload.get("answer") or "")
     answer_lower = answer.lower()
 
-    decision = next((s for s in steps if s.get("kind") == "decision"), None)
-    route = (decision or {}).get("detail")
+    # The route is the compliance tool's own output. The Bedrock path emits only
+    # tool_call steps, never a "decision" step, so reading the route from steps
+    # left it None on every case and route accuracy read 0.0 regardless of what
+    # the agent did.
+    route = None
+    for t in payload.get("tool_trace", []) or []:
+        if t.get("name") != "check_policy_compliance" or t.get("is_error"):
+            continue
+        result = t.get("result")
+        if isinstance(result, str):
+            try:
+                result = json.loads(result)
+            except ValueError:
+                result = None
+        if isinstance(result, dict) and result.get("route"):
+            route = result["route"]
+    if route is None:
+        decision = next((s for s in steps if s.get("kind") == "decision"), None)
+        route = (decision or {}).get("detail")
     clarification = next((s for s in steps if s.get("kind") == "clarification"), None)
 
     got_cites = {_norm_doc(c.get("citation") or
@@ -110,9 +127,6 @@ def score(case: dict, payload: dict, latency_ms: int) -> dict:
     if expected_route:
         if route:
             route_ok = route.strip().lower() == expected_route.strip().lower()
-        elif expected_route in ("insufficient", "manager approval required"):
-            # PTO outcomes do not produce a route; infer from the tool result.
-            route_ok = expected_route.lower() in answer_lower
         else:
             route_ok = False
 

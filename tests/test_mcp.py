@@ -16,6 +16,8 @@ REQUIRED_TOOLS = {
     "check_pto_balance",
     "check_policy_compliance",
     "draft_hr_email",
+    "lookup_benefits_status",
+    "create_mock_hr_ticket"
 }
 
 
