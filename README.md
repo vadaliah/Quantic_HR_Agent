@@ -2,6 +2,16 @@
 
 Agentic RAG + MCP project for Quantic AI Engineering Techniques and Architectures. **Submission: November 15, 2026.**
 
+**Live application:** https://quantic-hr-agent-dcw4.onrender.com/
+**Health:** https://quantic-hr-agent-dcw4.onrender.com/health
+**This repository:** https://github.com/vadaliah/Quantic_HR_Agent
+
+**Companion group repository (Apex People AI):** https://github.com/meghnadesaii/apex-people-ai — live at https://apex-people-ai.onrender.com/. Apex is the shared group repo for the same assignment brief, on a different stack.
+
+The code running on Render is this branch, `fix/bedrock-wiring-2026-11-11`. The default branch `main` may lag it; graders should use this branch (or the live URL), not assume `main` is the deployed revision.
+
+**Cold starts:** Render Free can sleep after inactivity, and Aurora Serverless v2 can auto-pause. A public `GET /health` on 15 Nov 2026 at 15:11 CET (Europe/Berlin) took 42.4 seconds (consistent with a cold start). That is a health-check time, not chat latency. Warm `/health` and `/chat` times are documented in `design-and-evaluation.md` and `deployed.md`. This documentation update did not call live `/chat`.
+
 ## Where the data lives
 
 **Deployment = Render + the existing Aurora database.** The app runs as one Render free web
@@ -127,10 +137,26 @@ npm --prefix frontend run dev
 uv run pytest -q
 ```
 
-No test calls AWS: Bedrock is replaced by a fake client (`tests/fakes.py`). Tests that touch
-the database need `DATABASE_URL` pointing at a Postgres with pgvector, migrations 001–006 and
-the seed applied; they are **skipped** when it is unreachable. The policy-search tests also
-need `policy_chunks` loaded (`ingest_corpus.py --skip-embeddings` is enough).
+The pre-existing suite has 24 tests under `tests/`. `tests/test_eval_scoring.py` adds offline scorer tests (12 cases) that need no database. No test calls AWS: Bedrock is replaced by a fake client (`tests/fakes.py`).
+
+**Why some tests are skipped.** Fixtures in `tests/conftest.py` skip (they do not fail) when a seeded local Postgres is unreachable, so the GitHub Actions `app` workflow can still run the offline suite. On the deploy-branch tip (`f95840c`, 14 Nov 2026) that workflow reported **8 passed, 16 skipped**:
+
+- Always run (no database): `tests/test_bedrock.py` (6), `tests/test_ping.py` (1), and `test_mode_selection` in `tests/test_agent_converse.py` (1). The new `tests/test_eval_scoring.py` is also offline and needs no database.
+- Skipped in CI and on any machine without `DATABASE_URL` pointing at a reachable, seeded Postgres (migrations 001–006 and seed applied; default URL `postgresql://quantic@127.0.0.1:5433/quantic_hr_agent`): the remaining tests in `test_agent_converse.py`, all of `test_agent_and_bff.py`, both tests in `test_mcp.py` (including MCP discovery and a live tool call), and all of `test_retrieval.py`. The policy-search tests also require `policy_chunks` to be loaded.
+
+**How to run the skipped tests locally** (does not touch the deployed Aurora database):
+
+```bash
+# Start a local Postgres with pgvector, apply migrations 001–006, load the seed
+# (see Database setup above), then optionally ingest text without Bedrock:
+uv run python scripts/ingest_corpus.py --skip-embeddings
+export DATABASE_URL=postgresql://quantic@127.0.0.1:5433/quantic_hr_agent
+uv run pytest -q
+```
+
+To run only the offline suite, leave `DATABASE_URL` unset or pointing at an unreachable host; pytest will skip the 16 database-backed tests and still run the others.
+
+`tests/test_mcp.py` currently asserts a required set of six tool names. The server now exposes eight tools (it also has `lookup_benefits_status` and `create_mock_hr_ticket`). The extra two are not missing from the server; they are simply not in that test's `REQUIRED_TOOLS` set. This PR does not change that assertion.
 
 ## Demo workflows
 

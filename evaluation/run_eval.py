@@ -19,10 +19,11 @@ Outputs, all under evaluation/results/:
   transcripts/      one markdown file per question, for reading the run
 
 Usage:
-    python3 evaluation/run_eval.py                  # all 25
+    python3 evaluation/run_eval.py                  # all cases in eval_set.jsonl
     python3 evaluation/run_eval.py --limit 5        # first five
     python3 evaluation/run_eval.py --id Q09 Q14     # named cases
     python3 evaluation/run_eval.py --fresh-thread   # one thread per question
+    python3 evaluation/run_eval.py --rescore        # re-score saved results; no /chat calls
 
 The API must be running. bash scripts/app.sh status will tell you.
 """
@@ -30,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import statistics
 import sys
 import time
@@ -74,9 +76,32 @@ def ask(question: str, employee_id: str, thread_id: str | None,
 
 
 def _norm_doc(ref: str) -> str:
-    """Gold docs use 'POL-001 s2.1'; tool citations use 'POL-001 s2.1'.
-    Normalise spacing so the two compare cleanly."""
-    return ref.replace(" ", "").replace("§", "s").lower()
+    """Normalise gold refs and tool citations to 'pol-001:2.1'.
+
+    Gold cases in eval_set.jsonl are written as 'POL-001 2.1' (no section
+    marker). Tool citations are typically 'POL-001 s2.1' or
+    '{document_id} s{section_id}'. The previous implementation stripped
+    spaces only, so gold became 'pol-0012.1' while citations became
+    'pol-001s2.1' and citation accuracy collapsed to 0.0 even when the
+    right section was cited.
+
+    Annex labels such as gold 'POL-005A 5' versus a citation 'POL-005A sA.5'
+    remain distinct; this helper does not invent a match across different
+    section identifiers.
+    """
+    text = (ref or "").strip().lower().replace("§", "s")
+    text = re.sub(r"\s+", " ", text)
+    match = re.match(
+        r"^([a-z]+-\d+[a-z]?)(?:\s*s(?=[\da-z])|\s+|:|/)(.+)$",
+        text,
+    )
+    if not match:
+        match = re.match(r"^([a-z]+-\d+[a-z]?)s?(\d.*)$", text.replace(" ", ""))
+    if match:
+        doc, section = match.group(1), match.group(2).strip()
+        section = re.sub(r"^s(?=[\da-z])", "", section)
+        return f"{doc}:{section}"
+    return text.replace(" ", "")
 
 
 def score(case: dict, payload: dict, latency_ms: int) -> dict:
@@ -316,13 +341,69 @@ def write_summary(rows: list[dict], summary: dict) -> Path:
     return path
 
 
+def rescore_existing(results_path: Path) -> list[dict]:
+    """Re-apply citation scoring to a saved results.jsonl without calling /chat."""
+    cases = {case["id"]: case for case in load_set()}
+    rows = [json.loads(line) for line in results_path.read_text().splitlines() if line.strip()]
+    for row in rows:
+        case = cases.get(row.get("id"))
+        if not case:
+            continue
+        gold = {_norm_doc(doc) for doc in (case.get("gold_docs") or [])}
+        got = {_norm_doc(cite) for cite in (row.get("citations") or [])}
+        row["gold_docs"] = sorted(gold)
+        row["citations"] = sorted(got)
+        row["citation_accuracy"] = (
+            round(len(gold & got) / len(gold), 3) if gold else None
+        )
+    return rows
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--id", nargs="*", dest="ids")
     parser.add_argument("--fresh-thread", action="store_true",
                         help="One thread per question instead of a shared one")
+    parser.add_argument(
+        "--rescore",
+        nargs="?",
+        const=str(RESULTS / "results.jsonl"),
+        help="Re-score citation accuracy from a saved results.jsonl; does not call /chat",
+    )
     args = parser.parse_args()
+
+    if args.rescore:
+        results_path = Path(args.rescore)
+        if not results_path.exists():
+            print(f"missing {results_path}", file=sys.stderr)
+            return 1
+        rows = rescore_existing(results_path)
+        RESULTS.mkdir(parents=True, exist_ok=True)
+        with results_path.open("w") as handle:
+            for row in rows:
+                handle.write(json.dumps(row) + "\n")
+        scored = [row for row in rows if row.get("latency_ms") is not None]
+        summary = aggregate(scored)
+        summary_path = write_summary(scored, summary)
+        note = (
+            "Citation identifiers were re-scored on 15 Nov 2026 (Europe/Berlin) "
+            "with the corrected `_norm_doc` helper. The underlying traces were "
+            "not re-run against `/chat`.\n\n"
+        )
+        body = summary_path.read_text()
+        if not body.startswith("Citation identifiers were re-scored"):
+            # Insert the note after the title line.
+            parts = body.split("\n", 1)
+            summary_path.write_text(parts[0] + "\n\n" + note + (parts[1].lstrip("\n") if len(parts) > 1 else ""))
+        print(json.dumps({k: summary[k] for k in (
+            "questions", "citation_accuracy", "tool_selection_accuracy",
+            "route_accuracy", "workflow_completion_rate", "behaviour_accuracy",
+            "groundedness", "latency_p50_ms", "latency_p95_ms",
+        )}, indent=2))
+        print(f"rewrote {results_path}")
+        print(f"rewrote {summary_path}")
+        return 0
 
     if not EVAL_SET.exists():
         print(f"missing {EVAL_SET}", file=sys.stderr)
