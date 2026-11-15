@@ -8,9 +8,22 @@ Agentic RAG + MCP project for Quantic AI Engineering Techniques and Architecture
 
 **Companion group repository (Apex People AI):** https://github.com/meghnadesaii/apex-people-ai — live at https://apex-people-ai.onrender.com/. Apex is the shared group repo for the same assignment brief, on a different stack.
 
+**Architecture views:** [current architecture](presentation/hiren-quantic-hr-agent.architecture-2026-11-15.html), [live/target architecture v4](presentation/hiren-target-architecture-2026-11-15-v4.html), and [comparison with Apex People AI](presentation/apex-vs-hiren.architecture-2026-11-15.html). PNG previews and a short index are in [presentation/README.md](presentation/README.md).
+
 The code running on Render is this branch, `fix/bedrock-wiring-2026-11-11`. The default branch `main` may lag it; graders should use this branch (or the live URL), not assume `main` is the deployed revision.
 
 **Cold starts:** Render Free can sleep after inactivity, and Aurora Serverless v2 can auto-pause. A public `GET /health` on 15 Nov 2026 at 15:11 CET (Europe/Berlin) took 42.4 seconds (consistent with a cold start). That is a health-check time, not chat latency. Warm `/health` and `/chat` times are documented in `design-and-evaluation.md` and `deployed.md`. This documentation update did not call live `/chat`.
+
+
+## Presentation views
+
+Interactive Archify diagrams for this submission (15 November 2026):
+
+- [Current Quantic HR Agent architecture](presentation/hiren-quantic-hr-agent.architecture-2026-11-15.html) — [PNG preview](presentation/hiren-quantic-hr-agent-2026-11-15-full.png)
+- [Live / target architecture (v4)](presentation/hiren-target-architecture-2026-11-15-v4.html) — [PNG preview](presentation/hiren-target-architecture-2026-11-15-v4.png)
+- [Comparison with Apex People AI](presentation/apex-vs-hiren.architecture-2026-11-15.html) — [PNG preview](presentation/apex-vs-hiren-2026-11-15-full.png)
+
+See [presentation/README.md](presentation/README.md). These views contain no access codes, keys, or tokens.
 
 ## Where the data lives
 
@@ -40,6 +53,18 @@ abstains and points to People Operations. When Bedrock is unavailable (no AWS cr
 an error, or `QUANTIC_AGENT_MODE=keyword`) it falls back to the local keyword router, which
 uses the same MCP tools. Policy search uses pgvector cosine similarity over Titan v2
 embeddings and falls back to `ILIKE` when no embeddings are loaded.
+
+### Architecture diagrams
+
+Interactive Archify views of this deploy-branch revision (`f95840c`, 14 Nov 2026) live in [`docs/architecture/`](docs/architecture/). Open the HTML in a browser; the PNG is a static snapshot. The files contain no credentials or private-network details. They do repeat AWS identifiers already present in this repository (account id, IAM user name, Secrets Manager secret name).
+
+**Current architecture** (15 Nov 2026) — [interactive HTML](docs/architecture/hiren-quantic-hr-agent.architecture-2026-11-15.html)
+
+![Quantic HR Agent current architecture](docs/architecture/hiren-quantic-hr-agent-2026-11-15-full.png)
+
+**Target architecture v4** (15 Nov 2026, updated to the live Render + Aurora deployment) — [interactive HTML](docs/architecture/hiren-target-architecture-2026-11-15-v4.html)
+
+![Quantic HR Agent target architecture v4](docs/architecture/hiren-target-architecture-2026-11-15-v4.png)
 
 ## Configuration
 
@@ -209,10 +234,17 @@ citations in about 14 s. Still to do: the AWS Budget alert. Do not run `cdk depl
 - **Teardown after grading:** delete the IAM access key (or user) and suspend or delete the
   Render service. The Aurora cluster is Hiren's and stays as is.
 
+## Presentation
+
+The Quantic presentation slide PDF will be added under [`docs/presentation/`](docs/presentation/) once a notes-free export is ready. See that folder's README. No slide file is included yet; speaker notes and access codes must not be committed there.
+
 ## Docs
+- [Architecture views](docs/architecture/)
+- [Presentation materials (placeholder)](docs/presentation/)
 - [Deploy on Render](docs/DEPLOY_RENDER.md)
 - [Cost-first strategy](docs/COST_FIRST_DELIVERY_STRATEGY.md)
 - [Master plan](docs/MASTER_PLAN.md)
 - [design-and-evaluation.md](design-and-evaluation.md)
 - [ai-tooling.md](ai-tooling.md)
 - [deployed.md](deployed.md)
+- [Architecture presentation views](presentation/README.md)
