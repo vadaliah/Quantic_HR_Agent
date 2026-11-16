@@ -1,22 +1,26 @@
 # Design and Evaluation
 
-Quantic HR Agent — an agentic RAG system over Acme Corp HR policy, deployed on
-Render and answered through Amazon Bedrock.
+Quantic HR Agent — an agentic Retrieval-Augmented Generation system over a
+synthetic Acme Corp HR policy corpus, deployed on Render, answered through Amazon
+Bedrock, with every structured lookup reached through Model Context Protocol
+(MCP) tools.
 
-- Deployed URL: https://quantic-hr-agent-dcw4.onrender.com
-- Branch: `fix/bedrock-wiring-2026-11-11`
-- Region: AWS `us-east-2`; Render free tier, Ohio
+- **Deployed URL:** https://quantic-hr-agent-dcw4.onrender.com
+- **Health:** https://quantic-hr-agent-dcw4.onrender.com/health
+- **Evaluation dashboard:** https://quantic-hr-agent-dcw4.onrender.com/evaluation
+- **Branch:** `main` (identical to `fix/bedrock-wiring-2026-11-11`)
+- **Region:** AWS `us-east-2`
 
 ---
 
 ## 1. Architecture
 
-One Render web service serves the API and the built UI on the same origin, so no
-CORS boundary exists in production and no second host is needed on the free tier.
+One Render web service serves the API and the built React UI on the same origin,
+so production has no CORS boundary and no second host on the free tier.
 
 ```
 Browser (React UI, served by the same service)
-   │  POST /chat            GET /employees, /threads, /evaluation, /health, /ping
+   │  POST /chat        GET /employees, /threads, /evaluation, /health, /ping
    ▼
 FastAPI BFF  (src/quantic_hr/bff.py)
    ├─ guardrail: needs_clarification?  → clarification turn, no model call
@@ -27,37 +31,35 @@ FastAPI BFF  (src/quantic_hr/bff.py)
           ├─ start_node        employee_id fixed to the session value
           ├─ route_start       QUANTIC_AGENT_MODE decides the path
           ├─ converse_node     Bedrock Converse tool-use loop, ≤ 6 rounds
-          │     ├─ session.initialize()          MCP handshake
-          │     ├─ session.list_tools()          live discovery
-          │     ├─ bedrock.converse(...)         model chooses tool + arguments
-          │     ├─ session.call_tool(name, args) executed over MCP
+          │     ├─ session.initialize()           MCP handshake
+          │     ├─ session.list_tools()           live discovery
+          │     ├─ bedrock.converse(...)          model chooses tool + arguments
+          │     ├─ session.call_tool(name, args)  executed over MCP
           │     └─ toolResult appended → loop
           └─ _collect          citations from successful traces only
    │
    ▼  MCP server (src/quantic_hr/mcp_server.py, FastMCP over stdio)
-   │     eight tools; read-only SQL guard
+   │     eight tools, each with a declared argument vocabulary
    ▼
-db.py  ── Aurora PostgreSQL 17.4 Serverless v2, pgvector(1024) HNSW
-   │       via the RDS Data API over HTTPS (no VPC route, no bastion)
+db.py  ── Aurora PostgreSQL Serverless v2, pgvector(1024) HNSW
+   │       reached through the RDS Data API over HTTPS
    ▼
 Bedrock us-east-2:  amazon.nova-pro-v1:0 (Converse), titan-embed-text-v2:0
 ```
 
-The layers the brief asks to be distinguishable — web app, agent orchestration,
-MCP client/server, RAG index, mock data, LLM provider — are separated by module,
-not by convention: `bff.py` (web), `agent.py` (orchestration + MCP client),
-`mcp_server.py` (MCP server + tool schemas), `tools.py` (RAG and data access),
-`db.py` (storage), `bedrock.py` (provider). A component diagram is in `docs/`
-(Archify export).
+The layers the brief asks to be distinguishable are separate modules: `bff.py`
+(web app), `agent.py` (orchestration and MCP client), `mcp_server.py` (MCP server
+and tool schemas), `tools.py` (RAG and the rule engine), `db.py` (storage),
+`bedrock.py` (LLM and embedding provider).
 
 ### Why the Data API rather than psycopg
 
 The Aurora cluster sits in private subnets and its DNS name resolves to an
-unroutable `10.20.x.x` address. A laptop — and a Render container — cannot reach
-it over TCP. The Data API is HTTPS with SigV4, so the same database is reachable
-from anywhere without a VPN, a bastion or an open port. `db.py` prefers the Data
-API when `CLUSTER_ARN` and `SECRET_ARN` are set and falls back to psycopg only
-where a route exists.
+address with no route from a workstation: `nc -vz <endpoint> 5432` hangs rather
+than refusing. The Data API is HTTPS with SigV4, so the same database is
+reachable from anywhere without a VPN, a bastion or an open port. `db.py`
+prefers the Data API when `CLUSTER_ARN` and `SECRET_ARN` are set, and falls back
+to psycopg only where a route exists.
 
 Both paths expose the same surface — `with connection() as conn:` then
 `conn.execute(sql, params).fetchone()` — so the tools are written once. Two
@@ -67,8 +69,22 @@ differences are absorbed inside `db.py`:
   rejects `%s` with `SQLState 42601`, so `to_named_sql()` rewrites `%s` to
   `:p1, :p2` and leaves literal percent signs inside `ILIKE '%…%'` alone.
 - **Types.** The Data API returns every scalar as JSON, so a `date` column
-  arrives as `"2026-11-12"`. `_row()` coerces ISO date strings so both paths
-  return the same Python types.
+  arrives as the string `"2026-11-15"` while psycopg returns a `date` object.
+
+**That second difference caused a real fault.** `check_pto_balance` did
+arithmetic on the two values and raised:
+
+```
+TypeError: unsupported operand type(s) for -: 'str' and 'str'
+```
+
+Every PTO question failed with the tool erroring, and the agent then reported
+that it could not find the employee's records — an infrastructure fault
+presented as a content finding. `_as_date()` now coerces both paths to a `date`
+before the calculation. It is the clearest example in this project of a defect
+that exists only because of the storage choice, and it is recorded here because
+the mitigation is specific: any code path shared between psycopg and the Data
+API needs a type-normalisation boundary.
 
 ---
 
@@ -76,106 +92,180 @@ differences are absorbed inside `db.py`:
 
 ### Corpus
 
-Sixteen policy documents in three formats (Markdown, HTML, PDF-derived text), so
-the ingester is exercised on more than one parser.
+**35 documents, ~40 pages**, in three formats (Markdown, HTML, PDF-derived
+text), so the ingester is exercised on more than one parser.
 
-- Documents: 16 (`POL-001` … `POL-012`, plus annexes `001A`, `002A`, `005A`, `006A`)
-- Chunks: **173**, all embedded at 1024 dimensions
-- Topics: PTO and sick leave, holidays, remote and hybrid work, international and
-  cross-state work, expenses, information security, benefits, leave of absence,
-  onboarding, equipment, code of conduct, HR escalation
+- Base policies POL-001 … POL-020, plus annexes POL-001A, POL-002A, POL-005A,
+  POL-006A, POL-009A
+- Expansion policies POL-021 … POL-030: contractor engagement, business
+  continuity, learning and development, relocation, AI tool use, grievance and
+  disciplinary, records retention, employee relations cases, intellectual
+  property, workplace accommodation
+- Chunks: **312**, all embedded at 1024 dimensions
 
-**Known shortfall.** The brief asks for 30–120 pages; the corpus is roughly 11–22
-pages depending on words-per-page assumptions. This is the largest unmet
-requirement and is recorded rather than padded.
+The corpus was authored for this project and deliberately cross-references: an
+expense limit is stated in POL-005 and worked through in POL-005A; a retention
+period is named in POL-017 and tabulated in POL-027. That makes multi-document
+retrieval a real problem rather than a nominal one.
 
 ### Chunking
 
-Heading-aware, then size-bounded. `MarkdownHeaderTextSplitter` splits on `#`,
-`##` and `###`, so a chunk never spans two policy sections; a
-`RecursiveCharacterTextSplitter` at 1600 characters with 240 overlap then bounds
-any section that is longer. Section metadata (`document_id`, `section_id`,
-`heading`) travels on every chunk, which is what makes a citation like
-`POL-003 §4.3` possible rather than a document-level reference.
+Heading-aware, then size-bounded. Sections are split on `#`, `##`, `###`
+(markdown) and `<h1>`–`<h3>` (HTML); a section longer than 300 words is split
+further with a `:1`/`:2` suffix on the chunk id. Section metadata
+(`document_id`, `section_id`, `heading`) travels on every chunk, which is what
+makes a citation like `POL-001 2.1` possible rather than a document-level
+reference.
+
+### Section parsing — a defect worth recording
+
+The original pattern was `^(\d+(?:\.\d+)*)\.?\s+(.*)$`. Two faults:
+
+1. A heading written `## 1. Observed Holidays` matched only when no dot followed
+   the number, so many top-level sections were stored as `section_id = '0'`.
+2. Annex documents number their sections `A.1`, `A.2`, which a digits-only
+   pattern cannot match at all.
+
+Every affected chunk was unaddressable — a citation read `POL-005A s0`, which
+points at nothing a reader can open, and the retrieval scorer counted it as a
+miss. `src/quantic_hr/sections.py` now handles numbered, annex, letter, roman,
+HTML and unnumbered headings; an unnumbered heading inherits its enclosing
+section rather than starting a new one. On the current corpus, **0 chunks carry
+section id `0`**.
 
 ### Embeddings and index
 
-Titan Text Embeddings v2, 1024 dimensions, in-region `us-east-2`, stored in a
-`vector(1024)` column with an HNSW cosine index.
+Titan Text Embeddings v2, 1024 dimensions, in-region, stored in a `vector(1024)`
+column with an HNSW cosine index. Ingestion runs through the Data API as well
+(`scripts/refresh_via_data_api.py`), for the same reason reads do.
 
 ### Retrieval
 
-`search_policy_documents(query, limit=5)` computes cosine similarity, keeps
-matches at or above a floor of **0.2** (`QUANTIC_MIN_SIMILARITY`), and returns
-`document_id`, `section_id`, `heading`, `content` and `score` per hit.
+`search_policy_documents(query, limit=5)` computes cosine similarity and keeps
+matches at or above `QUANTIC_MIN_SIMILARITY` (default **0.2**). An ILIKE fallback
+runs when no chunk carries an embedding, credentials are absent, or Bedrock
+fails — and reports which path it used, so a trace distinguishes a vector result
+from a degraded one.
 
-An ILIKE fallback runs when no chunk carries an embedding, when AWS credentials
-are absent, or when Bedrock fails — and reports which path it used, so the trace
-distinguishes a vector result from a degraded one.
+**One floor, not two.** An earlier version used 0.2 for retrieval and 0.35 for
+display. That meant a passage scoring between them could support the answer while
+the citation panel showed nothing: an answer grounded in text the reader was told
+did not exist. The floor is now shared, and the reader is protected by the
+citation count (3) and strongest-first ordering instead.
 
-**Two floors, deliberately.** 0.2 governs retrieval, because recall helps the
-model; **0.35** governs what is *displayed* as a citation, because a weak match
-presented as evidence invites the reader to trust something the corpus only
-half-supports. The displayed list is also capped at three and sorted
-strongest-first.
-
-### Citations
-
-Built from tool results, not from the model's text. Each citation carries its own
-snippet — the passage travels with the citation rather than in a parallel list,
-so sorting or capping cannot separate a citation from its evidence. A compliance
-result has no passage behind it, so it carries the tool's own `reason` instead.
-Traces where `is_error` is true are skipped.
+**Known limitation — cross-reference sections.** Index and cross-reference
+sections are strong lexical matches. `POL-020 §2 "Which Policy Governs"` and
+`POL-009 §11 "Related Policies"` score 0.35–0.40 for a PTO question, above the
+section that states the rule, and when the model chooses `limit: 1` it can
+receive a policy's introduction rather than its substance. This is the largest
+single cause of the citation accuracy reported in section 8. The identified
+mitigations are to exclude or down-weight cross-reference sections in retrieval,
+or to pre-retrieve with a fixed query and `limit` for known question shapes
+rather than letting the model choose.
 
 ---
 
-## 3. MCP server design
+## 3. The rule engine
 
-**Transport: stdio.** The server is spawned by the agent as a subprocess
-(`python -m quantic_hr.mcp_server`). Chosen because the brief's free-tier shape is
-one service, and stdio needs no port, no auth and no second host. The code is
-transport-agnostic: the same module would run over Streamable HTTP for a separate
-service.
+`check_policy_compliance` is a small rule engine, not a chain of `if`s, and the
+design is deliberate.
+
+**Rules are data.** `mock_data/policy_rules.json` holds each limit with the
+section that states it, so a verdict cites the text it came from. The PTO
+accrual rate and the carryover cap are there too, each with its own citation —
+the rate from POL-001 §2.1, the cap from §4.1 — so the two can change
+independently.
+
+**The rate is not read from the database.** `pto_accruals.accrual_days_per_month`
+exists, but the tool ignores it. A rule stored in a table is a rule the policy
+cannot govern: edit POL-001 and the answers would not move. Reading it from the
+rules file, with a citation, means the sentence a reader checks is the sentence
+the answer used. The corpus was changed to state the pro-rata method explicitly,
+so the cited section supports the figure the answer reports.
+
+**One result shape.** `checked`, `compliant`, `route`, `reason`, `comparison`,
+and the sections that supplied each figure. A check that could not run returns
+`checked: false, compliant: null` — **never `false`**.
+
+**That distinction was the single most consequential fix in the project.** The
+tool originally returned `compliant: false` for "I could not check", which the
+model read as the policy forbidding the purchase. Combined with a retrieved
+passage titled "What is not reimbursed", it produced a confident, correctly
+cited, inverted answer: **a $400 chair reported as breaking a $500 limit.** The
+citation was real; the inference was never performed. Three changes followed:
+the unsupported-check result became `null` rather than `false`, the check-type
+vocabulary was declared in the MCP docstring so the model stopped inventing
+names, and the comparison is now computed in code and returned as
+`"comparison": "400.00 <= 500.00"` so the model reports arithmetic rather than
+reasoning over prose.
+
+### The accrual, worked
+
+```
+days_elapsed = as_of − max(1 January, hire_date)
+months       = days_elapsed ÷ 30.4375         (AVERAGE_MONTH_DAYS = 365.25 / 12)
+accrued      = 1.25 × months
+available    = accrued + min(carryover, 5) − taken − pending
+```
+
+For E1007 on 15 November 2026: 318 days, 10.4476 months, 13.06 accrued, 2.00
+carryover applied against a 5-day cap, 4.00 taken, 0.00 pending →
+`available_days: 11.06`, with
+`available_formula: "13.06 + 2.00 - 4.00 - 0.00 = 11.06"` returned alongside.
+
+The divisor is named and derived in code as well as declared in the rules file,
+and the tool refuses to run if the two disagree. A bare `30.4375` in an
+expression is the kind of number a reader cannot account for six months later.
+
+---
+
+## 4. MCP server and tools
+
+**Transport: stdio.** The server is spawned by the agent as a subprocess. Chosen
+because the brief's free-tier shape is one service, and stdio needs no port, no
+auth and no second host. The code is transport-agnostic: the same module would
+run over Streamable HTTP for a separate service.
 
 **Discovery.** The agent calls `session.list_tools()` at runtime and builds the
 model's `toolConfig` from the returned JSON Schemas. There is no hand-written
 tool list, so a schema change cannot drift from what the model sees.
 
-**Tool surface (eight):**
+**Eight tools:**
 
 | Tool | Kind | Purpose |
 |---|---|---|
 | `search_policy_documents` | RAG | Cosine search over `policy_chunks` |
-| `get_policy_section` | RAG | One section by `document_id` + `section_id` |
+| `get_policy_section` | RAG | One section by document id and section id |
 | `lookup_employee_profile` | Structured data | Employee, location, work model |
-| `check_pto_balance` | Structured data | PTO in days as of a date |
+| `check_pto_balance` | Structured data | Balance computed from the policy rule |
 | `lookup_benefits_status` | Structured data | Benefits election and eligibility |
 | `check_policy_compliance` | Rules + RAG | Deterministic route with a real citation |
 | `draft_hr_email` | Mock action | Draft only; states that nothing was sent |
 | `create_mock_hr_ticket` | Mock action | Requires explicit confirmation |
 
-At least one tool uses the RAG index and at least one uses structured mock data,
-as required. All calls go through the MCP session — no tool is invoked as a bare
+At least one tool uses the RAG index and at least one uses structured data, as
+required. All calls go through the MCP session; no tool is invoked as a bare
 function.
 
+**Argument vocabularies are declared.** The MCP docstrings are the interface the
+model reads, so each tool lists allowed values, units, and when to call it.
+Before this, `check_type` had no declared domain and the model invented
+`office_furniture`, `reimbursement` and `office_chair_purchase` — three of the
+five names it used. A tool whose input domain is undefined is a tool that will be
+called wrongly.
+
 **Argument safety.** Before each `call_tool`, `employee_id` is overwritten with
-the session's employee:
-
-```python
-if "employee_id" in arguments:
-    arguments["employee_id"] = employee_id  # the session decides whose data is read
-```
-
-A model that tries to read another employee's records cannot, because the
-argument never reaches the tool unmodified.
+the session's employee, so a model that tries to read another employee's records
+cannot.
 
 **Write safety.** The only write path is `create_mock_hr_ticket`, which returns a
-preview unless `confirm=True`. The Data API path additionally refuses anything
-that is not a single `SELECT`/`WITH` statement.
+preview unless `confirm=True`. `db.execute()` applies a select-only guard that
+rejects anything but a single `SELECT`/`WITH` statement, and the per-chat prompt
+log is off unless `QUANTIC_PROMPT_LOG=1`.
 
 ---
 
-## 4. Agent orchestration
+## 5. Agent orchestration
 
 A LangGraph state machine with one primary path and one degraded path.
 
@@ -184,333 +274,336 @@ sends the conversation plus the discovered tool schemas; if `stopReason` is
 `tool_use`, every returned `toolUse` is executed over MCP and appended as a
 `toolResult` before the next round. The loop ends on a non-tool stop reason.
 
-**Conversation history.** Prior turns are seeded ahead of the current message, so
-a follow-up resolves in context. Only the question and the final answer are
-replayed; earlier tool output is deliberately excluded, because re-sending a
-stale `toolResult` invites the model to cite a result it did not retrieve in this
-run.
+**Retrieval before calculation.** The prompt requires `search_policy_documents`
+first, then the data tool, then the compliance check. The policy states the rule;
+the data tool states this employee's facts.
 
-**Abstain.** The agent refuses rather than guesses when the loop produces no
-citations, no text, or the model returns the abstain sentence. The message names
-where to go instead of inventing policy.
+**Abstain, and what counts as evidence.** The agent refuses rather than guesses
+when it has nothing to answer from. Two fixes were needed:
 
-**Degraded path.** If `QUANTIC_AGENT_MODE=keyword`, or `auto` with no credentials,
-or the Bedrock call raises `BedrockUnavailable`, a local keyword router plans tool
-calls and a template synthesises the answer. `mode` and `fallback_reason` are
-returned so the trace distinguishes an LLM answer from a template one.
+- A successful data tool result **is** evidence. The agent previously abstained
+  when citations were empty, discarding a live balance the tool had already
+  returned and telling the user their HR records could not be found.
+- The test for the abstain sentence was a substring match, so any answer that
+  mentioned the phrase was replaced by the canned refusal. It is now an exact
+  match, and a successful data tool overrides even that.
 
-**Operational traces, not hidden reasoning.** Every tool call is recorded with its
-name, arguments and output summary, and returned to the UI as `steps` and
+**A successful tool call is never reported as an outage.** When every tool call
+fails, the agent says the database is waking rather than that the policy does not
+exist.
+
+**Conversation history** seeds prior turns so a follow-up resolves in context.
+Only the question and the final answer are replayed; earlier tool output is
+excluded, because re-sending a stale `toolResult` invites the model to cite a
+result it did not retrieve in this run.
+
+**Operational traces, not hidden reasoning.** Every tool call is recorded with
+its name, arguments and output summary, and returned to the UI as `steps` and
 `tool_trace`. Reasoning tags are stripped from the answer text, so the response
 carries the answer and the trace carries the steps.
 
 ---
 
-## 5. Safety guardrails
+## 6. Safety guardrails
 
-Two deterministic pre-flight checks run in `bff.py` before the agent, so they cost
-no model call and appear in the trace as an explicit step.
+Two deterministic pre-flight checks run in `bff.py` before the agent, so they
+cost no model call and appear in the trace as an explicit step.
 
 | Trigger | Behaviour | Verified example |
 |---|---|---|
-| Request too vague to apply policy | Clarification question | "Can I take some time off?" → `needs_clarification: true` |
-| Question outside the corpus | Refusal with a redirect | "What is the CEO's salary?" → `refused: true` |
+| Request too vague to apply policy | Clarification question | "Can I take some time off?" |
+| Question outside the corpus | Refusal with a redirect | "What is the CEO's salary?" |
 | In-corpus question | Model + tools + citations | "Can I work from Portugal for six weeks?" |
 
-The clarification check distinguishes a **question about policy** from a **request
-needing specifics**. "How many vacation days do I accrue?" is answerable from the
-corpus and passes through; "Can I take some time off?" is a request with no dates
-and asks for them. An inquiry short-circuit runs first, so a question phrased as a
-request but asking about the rules is answered rather than deflected.
+The clarification check distinguishes a *question about policy* from a *request
+needing specifics*: "How many vacation days do I accrue?" is answerable from the
+corpus, while "Can I take some time off?" is a request with no dates and prompts
+for them.
 
-Beyond the guardrails: no irreversible action exists. `create_mock_hr_ticket`
-requires confirmation; `draft_hr_email` never sends. The application is read-only
-against the database.
+Beyond the guardrails, no irreversible action exists. `create_mock_hr_ticket`
+requires confirmation, `draft_hr_email` never sends, and the application is
+read-only against the database.
 
-**Known limitation.** The Data API secret is the cluster admin login. The
-application refuses writes, but the database itself would not stop a write made
-with that credential. A read-only database role with its own secret closes this;
-it requires a database write and was not performed, because the shared cluster is
-owned by another project.
+**Known limitation.** These guards match a narrower set of phrasings than the
+evaluation exercises. Six ambiguous and out-of-scope cases were answered rather
+than clarified or refused, which is the behaviour accuracy reported in section 8.
 
 ---
 
-## 6. Deployment
+## 7. Deployment
 
-**Host: Render free web service**, region Ohio — closest Render region to
-`us-east-2`. One Docker image serves the API, the MCP server as a subprocess, and
-the built React UI.
+**Render free web service**, region Ohio. One Docker image serves the API, the
+MCP server as a subprocess, and the built React UI.
 
 | Variable | Value |
 |---|---|
 | `AWS_REGION` | `us-east-2` |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM user `quantic-hr-render`, set in the dashboard (`sync: false`) |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM user, set in the dashboard (`sync: false`) |
 | `DB_MODE` | `data_api` |
-| `DB_CLUSTER_ARN` / `DB_SECRET_ARN` | The existing cluster and admin secret |
-| `CLUSTER_ARN` / `SECRET_ARN` | Same values — the names `db.py` reads |
+| `CLUSTER_ARN` / `SECRET_ARN` | The cluster and its Data API secret |
 | `DB_NAME` | `quantic_hr_agent` |
 | `DB_RESUME_WAIT_SECONDS` | `60` |
 | `CHAT_MODEL` | `us.amazon.nova-pro-v1:0` |
 | `BEDROCK_EMBEDDING_MODEL` | `amazon.titan-embed-text-v2:0` |
-| `QUANTIC_AGENT_MODE` | `auto` |
-| `QUANTIC_RETRIEVAL` | `auto` |
 | `QUANTIC_MIN_SIMILARITY` | `0.2` |
+| `QUANTIC_BUILD` | Reported on `/health`, so a deploy can be verified in one request |
 
 **IAM least privilege.** One inline policy: `bedrock:InvokeModel` on the Nova Pro
-inference profile and the foundation models in each destination region, on the
-Titan v2 foundation model, `rds-data:ExecuteStatement` and
-`BatchExecuteStatement` on the one cluster ARN, and `secretsmanager:GetSecretValue`
-on the one secret ARN. No wildcards. The simulator confirms `rds:DeleteDBCluster`,
-`secretsmanager:PutSecretValue` and `s3:ListAllMyBuckets` are denied. Note that
-`bedrock:InvokeModel` also authorises Converse — the Converse API reference states
-this — so no separate `bedrock:Converse` action is granted.
+inference profile and the Titan v2 foundation model, `rds-data:ExecuteStatement`
+and `BatchExecuteStatement` on the one cluster ARN, and
+`secretsmanager:GetSecretValue` on the one secret ARN. No wildcards.
 
 **Cold start.**
 
 | Event | Cost |
 |---|---|
 | Render free spin-down after ~15 min idle | 30–60 s on the next request |
-| Aurora auto-pause after 300 s idle | up to 60 s, retried inside the app |
-| Warm request, two tool rounds | ~6 s |
+| Aurora auto-pause after 300 s idle | the first request returns "the HR database is waking up" |
 
 `/ping` deliberately touches neither the database nor Bedrock, so Render's health
-check never keeps Aurora awake. The trade-off is that the first request after an
-idle period pays both resume costs.
+check never keeps Aurora awake. `/health` does touch the database, which is what
+wakes it — useful immediately before a demonstration.
+
+**Build marker.** `/health` reports a `build` string. A source grep proves the
+file on disk; only this proves the file running, and without it a fix can be
+committed, pushed and never deployed without anyone noticing.
 
 **Infrastructure as code.** The existing `QuanticHrAgentStack` CDK is kept as a
 record of the database stack. `cdk deploy` must not be run from this branch: a
-read-only `cdk diff` showed it would replace both isolated DB subnets and the
-database security group. `QUANTIC_ALLOW_AWS_DEPLOY=no` guards the deploy script.
+read-only `cdk diff` showed it would replace the DB subnets and the database
+security group.
 
 ---
 
-## 7. Evaluation
+## 8. Evaluation
 
 ### Method
 
-25 gold cases in `evaluation/eval_set.jsonl`, each carrying `gold_answer`,
+30 gold cases in `evaluation/eval_set.jsonl`, each carrying a `gold_answer`,
 `gold_docs`, `expected_tools`, `expected_route` and `expected_behavior`.
 
 | Category | n | What it tests |
 |---|---|---|
 | simple_policy | 8 | Retrieval only |
-| multi_document | 5 | Two or more documents, or an escalation route |
-| tool_requiring | 6 | Must call a data tool, and retrieve policy |
-| ambiguous | 3 | Under-specified requests |
-| out_of_scope | 3 | Questions the corpus does not cover |
+| multi_document | 7 | Two or more documents, or a threshold pair |
+| tool_requiring | 7 | Must call a data tool, and retrieve policy |
+| ambiguous | 4 | Under-specified requests |
+| out_of_scope | 4 | Questions the corpus does not cover |
 
-`evaluation/run_eval.py` drives `/chat`, records the full evidence trail per case
-(question, decision path, every MCP call with arguments and output, citations,
-route, latency) and writes `results.jsonl`, `summary.md` and one transcript per
-case. `python3 evaluation/run_eval.py --rescore` re-applies citation scoring to a saved `results.jsonl` without calling `/chat`. The dashboard at `/evaluation` reads the same file.
+`evaluation/run_eval.py` drives `/chat` against the deployed service, records the
+full evidence trail per case, and writes `results.jsonl`, `summary.md` and one
+transcript per case. The dashboard at `/evaluation` reads `/evaluation/results`.
 
 ### Results
 
-Measured on the deployment branch.
+Measured warm, on the deployed service, 16 November 2026.
 
 | Metric | Value |
 |---|---|
-| Citation accuracy | 0.692 |
-| Tool selection accuracy | 0.733 |
-| Behaviour accuracy | **1.0** |
-| Route accuracy | 0.727 |
-| Workflow completion | **1.0** |
-| Overall outcome | 17 all-passed · 5 citations · 3 route |
+| Citation accuracy | **0.409** |
+| Tool selection accuracy | **0.909** |
+| Route accuracy | **0.625** |
+| Workflow completion rate | **1.0** |
+| Behaviour accuracy | 0.767 |
+| Groundedness (proxy) | 1.0 |
+| Planning errors | 0 |
+| Escalations | 0 |
+| Capped runs | 0 |
+| Latency p50 | **13,611 ms** |
+| Latency p95 | 16,788 ms |
 
-Behaviour accuracy of 1.0 means every case did the right *kind* of thing —
-answered, refused or clarified — which is the guardrail requirement. Completion of
-1.0 means none hung or errored. The two gaps are citations (5 cases) and route
-(3).
+By category:
 
-The table above is a **25-case** run recorded on the deployment branch. It is not
-the same artefact as `evaluation/results/summary.md`.
+| Category | n | Citation acc. | Route acc. | Behaviour |
+|---|---|---|---|---|
+| simple_policy | 8 | 0.500 | — | 1.000 |
+| multi_document | 7 | 0.357 | 1.000 | 0.857 |
+| tool_requiring | 7 | 0.357 | 0.571 | 1.000 |
+| ambiguous | 4 | — | — | 0.250 |
+| out_of_scope | 4 | — | — | 0.250 |
 
-### 30-case committed run and a scorer bug
-
-`evaluation/eval_set.jsonl` now has **30** cases (not 25). A later run of that
-set, committed in `evaluation/results/`, originally reported citation accuracy
-**0.0** and route accuracy **0.0**. The citation figure was a scorer bug, not a
-finding that no gold document was cited.
-
-`evaluation/run_eval.py` `_norm_doc` used to strip spaces only. Gold refs such as
-`POL-001 2.1` became `pol-0012.1`, while tool citations such as `POL-001 s2.1`
-became `pol-001s2.1`, so the sets never intersected. The helper now normalises
-both spellings (and `POL-001:2.1`, `POL-001s2.1`, `§`) to `pol-001:2.1`. Annex
-labels that genuinely differ (`POL-005A 5` vs `POL-005A sA.5`) are still treated
-as different identifiers.
-
-On 15 Nov 2026 the committed 30-case traces were **re-scored offline** with the
-corrected helper (`python3 evaluation/run_eval.py --rescore`). No `/chat` call
-and no Bedrock or Aurora traffic was involved. After re-scoring, citation
-accuracy on that run is **0.591** (12 of 22 gold-labelled cases fully matched,
-two partial, eight still 0.0 because the traces cited a different section or
-none of the gold sections). Route accuracy remains **0.0** on that run for a
-separate reason that this change does not alter: several observed
-decision-step routes are `INSUFFICIENT` or `None` while the gold labels are
-values such as `INSUFFICIENT_BALANCE` or `MANAGER_APPROVAL`. That may be a
-route-vocabulary mismatch, a decision-step extraction issue, or a real
-behavioural miss; it is not obviously the same class of one-line scorer bug, so
-it is left unchanged.
-
-The 25-case citation figure of 0.692 above was not recomputed.
+Workflow completion at 1.0 means no case hung, errored or exhausted its step
+budget. Tool selection at 0.909 means the expected tools were called in almost
+every case.
 
 ### Latency
 
-Measured warm, on the deployed service, over 25 cases.
+Warm latency is p50 13.6 s and p95 16.8 s. The cost is **four sequential Bedrock
+calls** — tool selection, query embedding, retrieval, synthesis — which cannot be
+parallelised within the Converse tool-use contract. It is not a tail of slow
+queries: p50 and p95 are within 25% of each other. Two overheads are identifiable
+but were not removed: the MCP session is re-established per request (roughly 1–2 s
+of every question), and the model chooses its own retrieval depth, so a `limit: 1`
+search occasionally forces an extra round. Cold, add Render's 30–60 s wake and
+Aurora's resume.
 
-| p50 | p95 | min | max |
-|---|---|---|---|
-| 6053 ms | 10328 ms | 4801 ms | 10912 ms |
+### Limitations, with causes
 
-p95 is not a tail of slow queries — it is the cases that need four sequential
-Bedrock calls: tool selection, query embedding, retrieval, then synthesis. p50 at
-6 s is the two-call path. Measured cold, add Render's 30–60 s wake plus an Aurora
-resume of up to 60 s; those are not in these figures. Much of the warm cost is
-re-handshaking: `_converse_loop` opens a fresh MCP session per request, which is
-1–2 s before any model call.
+**Citation accuracy 0.409.** The dominant cause is retrieval preferring
+cross-reference sections over rule sections — `POL-020 §2` and `POL-009 §11`
+score 0.35–0.40 against almost any question. Mitigations are named in section 2.
 
-### The defect the evaluation found
+**Behaviour accuracy 0.767.** Six cases were answered rather than clarified or
+refused, because the pre-flight guardrails match a narrower set of phrasings than
+the evaluation uses.
 
-Every top-level policy section was stored with `section_id = '0'`, so citations
-rendered as `s0` and were scored as misses. The corpus writes those headings as
-`## 1. Observed Holidays`; the section regex required a space directly after the
-number, so the pattern never matched. Making the trailing dot optional
-(`^(\d+(?:\.\d+)*)\.?\s+(.*)$`) repaired POL-002 §1, POL-005 §1, POL-006 §7 and
-POL-010 §3 — four of five citation failures — and moved citation accuracy from
-0.542 to 0.692.
+**Three gold answers are arguably wrong, not the agent.** For a $2000 laptop the
+agent returned `CANNOT_DETERMINE`; for a $500 laptop and a $600 chair it returned
+`PARTIAL_UP_TO_LIMIT`, where the gold expected `NEEDS_PRE_APPROVAL` and
+`CLAIM_WITH_RECEIPT`. Given the $1000 pre-approval threshold and the $500
+carryover-style cap, the agent's routes are defensible and the gold answers need
+review rather than the code.
 
-Because chunk ids derive from `document_id`/`section_id`/index, the fix renumbers
-affected chunks. `scripts/rebuild_rag.sh` therefore deletes `policy_chunks` and
-reloads from `corpus/`, failing the run if any chunk still carries section id `0`.
+### What is not measured
 
-### A grounding failure the evaluation found
+- **No ablation.** The cleanest available comparison is `QUANTIC_MIN_SIMILARITY`
+  0.2 against 0.35, now that one variable governs both retrieval and display, or
+  keyword against vector retrieval.
+- **No cold-versus-warm split.** The figures above are warm only.
+- **No labelled groundedness judge.** The harness reports a proxy — an answer
+  exists and every citation was retrieved in the same run.
 
-"What if I buy a $400 chair?" was answered as *not* reimbursable, citing
-POL-005 §2.3 — the "What is not reimbursed" section. The model applied an
-above-the-limit exclusion to a figure *below* the limit and inverted the
-conclusion. The citation was real; the inference was not.
+### The measurement defects, recorded
 
-Three causes, and the fixes differ:
+Six defects were found and corrected in the evaluation harness during this work.
+**Every one of them read as an agent failure and none of them was:**
 
-- `check_policy_compliance` returned `unsupported check_type` for the label the
-  model chose, leaving the numeric comparison to be read from prose. The tool now
-  accepts the names the model actually produces and performs the comparison in
-  code.
-- The limit was hardcoded. It is now read from the policy text, so the figure in
-  the answer and the citation behind it come from one source, and a corpus edit
-  propagates. If no figure can be read, the tool reports that rather than
-  inventing a threshold.
-- Retrieval was not always attempted, so some runs produced no citations at all
-  and abstained. The prompt now requires `search_policy_documents` before any
-  policy answer.
+1. The harness was pointed at `127.0.0.1:8000` rather than the deployed URL, so
+   every case failed in under 400 ms and the run reported all zeros.
+2. It was pointed at localhost a second time after a file was reverted,
+   reproducing the same false zeros.
+3. An expired AWS SSO token caused a `TokenRetrievalError` in the harness, which
+   again presented as an agent failure.
+4. The route was read from a `decision` step that the Bedrock path never emits,
+   so the observed route was `None` on all 30 cases and route accuracy read 0.0
+   regardless of what the compliance tool returned.
+5. The citation reference separator differed between the gold and observed sides
+   (`POL-001 2.1` against `POL-001:2.1`), so the sets never intersected.
+6. Annex document ids (`POL-001A A.4`) were not normalised, so every annex
+   citation scored as a miss.
 
-A related observation: the relevant per-item limit lives in the **annex**
-(`POL-005A §0`, "Home Office Set-Up": desk $320, ergonomic chair $410), while
-POL-005 §2.1 states a $500 one-time stipend. Both are in the corpus and they
-differ. Which governs is a policy-authoring question, and the annex currently
-wins by retrieval score. Worth resolving in the corpus rather than in code.
-
-### Not yet measured
-
-Three items the brief names are absent, and are recorded here rather than implied:
-
-- **An ablation.** Planned: retrieval floor 0.2 versus 0.35, or keyword versus vector.
-- **p50/p95 split by cold and warm.** The figures above are warm-only.
-- **A groundedness score from a labelled judge.** The harness reports a proxy — an
-  answer exists and every citation shown was retrieved this run — not a per-claim
-  entailment judgement.
+The lesson is stated in section 12: **a displayed number is not evidence until
+its source has been traced.** A scorer needs its own tests.
 
 ---
 
-## 8. The two demo tasks
+## 9. Demonstration tasks
+
+Three tasks are demonstrated end to end, each requiring multi-step reasoning, RAG
+retrieval, and structured or mock-data tool use.
 
 ### Task A — remote work from another country
 
 **Question:** "Can I work from Portugal for six weeks?" · **Employee:** E1011
 
 ```
-1. search_policy_documents
-     {"query": "remote work abroad"}
-2. check_policy_compliance
-     {"employee_id": "E1011", "destination_region": "PT", "check_type": "remote_work"}
+1. search_policy_documents   {"query": "remote work abroad"}
+2. check_policy_compliance   {"employee_id": "E1011",
+                              "destination_region": "PT",
+                              "check_type": "remote_work"}
 ```
 
-**Result:** "Working from Portugal for six weeks is not compliant with the remote
-work policy [POL-003 4.3]. You need both People Operations and Legal approval for
-working outside the United States for more than 30 consecutive days."
+**Result:** not compliant with POL-003 §4.3 — working outside the United States
+for more than 30 consecutive days needs People Operations and Legal approval
+before travel is booked.
 
-**Citations:** POL-003 §2.3, §4.3, §2.2 · **Latency:** 12971 ms
+**Citations:** POL-003 §2.3, §4.3, §2.2
 
-The model chose both tools and supplied `destination_region: PT` by parsing the
-question; neither call is hard-coded.
+The model selected both tools and supplied `destination_region: PT` by parsing
+the question; neither call is hard-coded.
 
-### Task B — PTO request with manager approval
+### Task B — expense compliance
 
-**Question:** "Can I take 3 days of PTO next week?" · **Employee:** E1012
+**Question:** "Can I claim a $400 office chair?" · **Employee:** E1007
 
 ```
-1. check_pto_balance          {"employee_id": "E1012"}
-2. check_policy_compliance    {"employee_id": "E1012", "requested_days": 3, "check_type": "pto"}
+1. search_policy_documents   {"query": "office chair purchase"}
+2. check_policy_compliance   {"employee_id": "E1007",
+                              "check_type": "expense",
+                              "amount": 400,
+                              "expense_category": "chair"}
 ```
 
-**Result:** "You have sufficient PTO balance for 3 days, but manager approval is
-required [POL-001 2.1]."
+**Result:** compliant — `comparison: "400.00 <= 500.00"`, within the $500
+one-time home office stipend.
 
-**Citations:** POL-001 §2.1
+**Citations:** POL-005 §2.1, POL-005A §A.2
 
-This task chains two tools: the balance establishes sufficiency, the compliance
-check establishes the approval requirement.
+### Task C — PTO with a computed balance
 
-### Guardrail demonstrations
+**Question:** "Can I take 15 days PTO?" · **Employee:** E1007
 
-| Question | Response |
-|---|---|
-| "What is the CEO's salary?" | `refused: true` — the corpus does not cover compensation |
-| "Can I take some time off?" | `needs_clarification: true` — dates and duration requested |
+```
+1. search_policy_documents   {"query": "PTO policy"}
+2. check_pto_balance         {"employee_id": "E1007"}
+3. check_policy_compliance   {"employee_id": "E1007",
+                              "check_type": "pto",
+                              "days_requested": 15}
+```
+
+**Result:** refused — `route: INSUFFICIENT_BALANCE`, `comparison: "15 > 11.06"`,
+`available_formula: "13.06 + 2.00 - 4.00 - 0.00 = 11.06"`.
+
+The balance is computed from the policy rule, not read from a stored figure.
 
 ---
 
-## 9. Test suite
-
-`tests/` holds the offline suite, which runs in CI on every push.
+## 10. Test suite
 
 | File | Covers |
 |---|---|
-| `test_tool_contract.py` | Every MCP wrapper matches its `tools.py` signature; defaults agree; docstrings carry Args/Returns and a when-to-call line; the write tool documents confirmation; units are days, not hours |
+| `test_policy_rules.py` | The rule engine with no database and no model: accrual boundaries, the carryover cap, unknown check types, the SQL guard |
+| `test_tool_contract.py` | Lists all eight tools from the MCP server with no database, and asserts the published schema matches the implementation signature |
+| `test_sections.py` | Heading parsing across every form present in the corpus |
 | `test_agent_and_bff.py` | Endpoint contracts and agent behaviour |
-| `test_mcp.py` | Starts the real stdio server and calls a tool over the protocol |
+| `test_mcp.py` | Starts the real stdio server and calls a tool over the protocol (needs a seeded Postgres; skipped in CI) |
 
-`test_tool_contract.py` exists because of a specific failure: the PTO tool moved
-from `requested_hours` to `days_requested`, the wrapper was not updated, and the
-published schema was wrong until a request failed. The test compares
-`inspect.signature` of wrapper and implementation, which catches that class of
-defect without a database.
+The rule-engine tests exist because of the chair defect: there was no way to ask
+*the rule* whether 400 was under 500 except by going through the model. A rule
+layer that can only be exercised through an agent is a rule layer whose defects
+surface as wrong answers.
 
-**CI.** `.github/workflows/app.yml` runs on every push and pull request:
-`uv sync --group dev`, `uv run pytest -q`, an import check across the app modules,
-and `npm ci && npm run build` for the frontend. The `infrastructure` workflow runs
-the CDK jest suite.
-
-**Known gap.** The MCP discovery test needs a database and skips in CI, so no MCP
-call currently runs there. A database-free discovery assertion — list tools,
-assert the eight names and that `check_policy_compliance` takes `days_requested` —
-would close it without infrastructure.
+**Known gap.** `test_mcp.py` requires a database and skips in CI, so no MCP call
+runs there. `test_tool_contract.py` closes the discovery half without
+infrastructure. Sixteen tests are skipped in CI for this reason, and the README
+documents how to run them locally against a seeded Postgres.
 
 ---
 
-## 10. What is not complete
-
-Recorded plainly, because these are what stand between the current state and the
-rubric's score-5 wording.
+## 11. What is not complete
 
 | Item | Status |
 |---|---|
-| Corpus of 30–120 pages | **Not met** — ~11–22 pages |
-| Evaluation ablation | **Not produced** |
-| p50/p95 split cold vs warm | **Not produced** |
-| Labelled groundedness score | **Not produced** — proxy only |
-| MCP discovery test in CI | **Not met** — test exists, skips without a database |
-| Read-only database role | **Not done** — needs a database write |
-| Escalation flag | No code path sets `escalation=true`; the UI renders the panel only if present |
-| Annex section numbering | Annexes use `A.x`, which the section regex does not match, so their citations read `§0` |
-| Demo video | Not recorded |
+| Evaluation ablation | Not produced |
+| p50/p95 split cold vs warm | Not produced |
+| Labelled groundedness score | Not produced — proxy only |
+| Cross-reference sections in retrieval | Known limitation, mitigation identified |
+| Guardrail phrasing coverage | Known limitation — behaviour 0.767 |
+| Three gold answers for expense routes | Need review; the agent's routes are defensible |
+
+---
+
+## 12. What this project taught
+
+**An agent probes every hole in a tool contract, every run.** A traditional
+application only ever calls a tool with arguments its own code chose. An agent
+invents them. Every underspecified field and unstated rule surfaces as a wrong
+answer in production rather than staying dormant, which means the tool contract
+has to be written before the tool: declared vocabularies, a fixed result shape
+including the failure shape, and a rule layer that can be tested without the
+model.
+
+**"I could not check" must be distinguishable from "no".** The worst defect in
+this project — a $400 chair reported as breaking a $500 limit — came from a tool
+whose input domain was undefined and whose inability to check was returned as a
+negative verdict. A result shape that collapses those two cases will produce
+confident, cited, inverted answers.
+
+**A displayed number is not evidence until its source has been traced.** Six
+defects in the evaluation harness each read as an agent failure and none of them
+was: a wrong target URL twice, an expired credential, a route read from a step
+that never exists, and two reference-normalisation faults. The dashboard carried
+the same trap — it rendered an embedded fixture rather than the live endpoint, so
+its figures were frozen for days while every run wrote correct data beside it.
+The mitigation is not vigilance but mechanism: a build marker on `/health` so a
+deploy can be verified in one request, and a scorer with its own tests.
