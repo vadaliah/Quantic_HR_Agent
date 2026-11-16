@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re as _re
 import re
 import statistics
 import sys
@@ -39,7 +40,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-BASE = "http" + "://" + "127.0.0.1" + ":8000"
+BASE = "https://" + "quantic-hr-agent-dcw4.onrender.com"
 ROOT = Path(__file__).resolve().parents[1]
 EVAL_SET = ROOT / "evaluation" / "eval_set.jsonl"
 RESULTS = ROOT / "evaluation" / "results"
@@ -76,33 +77,16 @@ def ask(question: str, employee_id: str, thread_id: str | None,
 
 
 def _norm_doc(ref: str) -> str:
-    """Normalise gold refs and tool citations to 'pol-001:2.1'.
+    """Reduce a document reference to one canonical form.
 
-    Gold cases in eval_set.jsonl are written as 'POL-001 2.1' (no section
-    marker). Tool citations are typically 'POL-001 s2.1' or
-    '{document_id} s{section_id}'. The previous implementation stripped
-    spaces only, so gold became 'pol-0012.1' while citations became
-    'pol-001s2.1' and citation accuracy collapsed to 0.0 even when the
-    right section was cited.
-
-    Annex labels such as gold 'POL-005A 5' versus a citation 'POL-005A sA.5'
-    remain distinct; this helper does not invent a match across different
-    section identifiers.
+    The corpus, the gold answers and this harness use three separators:
+    'POL-001 2.1', 'POL-001:2.1' and a section sign. Normalising only spaces and
+    the sign left 'pol-001:2.1' beside 'pol-0012.1', so gold and observed never
+    intersected and citation accuracy read 0.0 on every case.
     """
-    text = (ref or "").strip().lower().replace("§", "s")
-    text = re.sub(r"\s+", " ", text)
-    match = re.match(
-        r"^([a-z]+-\d+[a-z]?)(?:\s*s(?=[\da-z])|\s+|:|/)(.+)$",
-        text,
-    )
-    if not match:
-        match = re.match(r"^([a-z]+-\d+[a-z]?)s?(\d.*)$", text.replace(" ", ""))
-    if match:
-        doc, section = match.group(1), match.group(2).strip()
-        section = re.sub(r"^s(?=[\da-z])", "", section)
-        return f"{doc}:{section}"
-    return text.replace(" ", "")
-
+    ref = ref.replace("\u00a7", " ").replace(":", " ").replace(" ", "")
+    ref = _re.sub(r"^(pol-\d{3}[a-z]?)s(?=[0-9a-z]\.)", r"\1 ", ref.lower())
+    return _re.sub(r"^(pol-\d{3}[a-z]?)(?=[0-9a-z])", r"\1:", ref)
 
 def score(case: dict, payload: dict, latency_ms: int) -> dict:
     citations = payload.get("citations", []) or []
@@ -133,7 +117,7 @@ def score(case: dict, payload: dict, latency_ms: int) -> dict:
     clarification = next((s for s in steps if s.get("kind") == "clarification"), None)
 
     got_cites = {_norm_doc(c.get("citation") or
-                           f"{c.get('document_id')} s{c.get('section_id')}")
+                           f"{c.get('document_id')}:{c.get('section_id')}")
                  for c in citations}
     gold = {_norm_doc(d) for d in (case.get("gold_docs") or [])}
 
@@ -169,7 +153,7 @@ def score(case: dict, payload: dict, latency_ms: int) -> dict:
     # Groundedness proxy: every citation shown, and an answer that is not empty.
     grounded = bool(answer.strip()) and (not citations or all(
         _norm_doc(c.get("citation") or
-                  f"{c.get('document_id')} s{c.get('section_id')}") in got_cites
+                  f"{c.get('document_id')}:{c.get('section_id')}") in got_cites
         for c in citations))
 
     return {
