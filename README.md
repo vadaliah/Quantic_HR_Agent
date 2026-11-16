@@ -10,8 +10,7 @@ Agentic RAG + MCP project for Quantic AI Engineering Techniques and Architecture
 
 **Architecture views:** [current architecture](presentation/hiren-quantic-hr-agent.architecture-2026-11-15.html), [live/target architecture v4](presentation/hiren-target-architecture-2026-11-15-v4.html), and [comparison with Apex People AI](presentation/apex-vs-hiren.architecture-2026-11-15.html). PNG previews and a short index are in [presentation/README.md](presentation/README.md).
 
-The code running on Render is this branch, `fix/bedrock-wiring-2026-11-11`. The default branch `main` may lag it; graders should use this branch (or the live URL), not assume `main` is the deployed revision.
-
+**Branch:** `main` — clone and build from this branch.
 **Cold starts:** Render Free can sleep after inactivity, and Aurora Serverless v2 can auto-pause. A public `GET /health` on 15 Nov 2026 at 15:11 CET (Europe/Berlin) took 42.4 seconds (consistent with a cold start). That is a health-check time, not chat latency. Warm `/health` and `/chat` times are documented in `design-and-evaluation.md` and `deployed.md`. This documentation update did not call live `/chat`.
 
 
@@ -180,8 +179,6 @@ uv run pytest -q
 ```
 
 To run only the offline suite, leave `DATABASE_URL` unset or pointing at an unreachable host; pytest will skip the 16 database-backed tests and still run the others.
-
-`tests/test_mcp.py` currently asserts a required set of six tool names. The server now exposes eight tools (it also has `lookup_benefits_status` and `create_mock_hr_ticket`). The extra two are not missing from the server; they are simply not in that test's `REQUIRED_TOOLS` set. This PR does not change that assertion.
 
 ## Demo workflows
 
