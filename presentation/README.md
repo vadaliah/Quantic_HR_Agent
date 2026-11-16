@@ -4,7 +4,7 @@ Architecture diagrams generated with Archify on 15 November 2026 for the Quantic
 
 | View | HTML | PNG preview |
 | --- | --- | --- |
-| Current Quantic HR Agent architecture (pinned to `f95840c` on `fix/bedrock-wiring-2026-11-11`) | [hiren-quantic-hr-agent.architecture-2026-11-15.html](hiren-quantic-hr-agent.architecture-2026-11-15.html) | [hiren-quantic-hr-agent-2026-11-15-full.png](hiren-quantic-hr-agent-2026-11-15-full.png) |
+| Current Quantic HR Agent architecture (pinned to `f95840c`; that commit is now on `main`) | [hiren-quantic-hr-agent.architecture-2026-11-15.html](hiren-quantic-hr-agent.architecture-2026-11-15.html) | [hiren-quantic-hr-agent-2026-11-15-full.png](hiren-quantic-hr-agent-2026-11-15-full.png) |
 | Live / target architecture (v4, 15 November 2026) | [hiren-target-architecture-2026-11-15-v4.html](hiren-target-architecture-2026-11-15-v4.html) | [hiren-target-architecture-2026-11-15-v4.png](hiren-target-architecture-2026-11-15-v4.png) |
 | Comparison with the companion Apex People AI repo | [apex-vs-hiren.architecture-2026-11-15.html](apex-vs-hiren.architecture-2026-11-15.html) | [apex-vs-hiren-2026-11-15-full.png](apex-vs-hiren-2026-11-15-full.png) |
 
