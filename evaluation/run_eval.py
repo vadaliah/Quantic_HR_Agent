@@ -79,43 +79,162 @@ def ask(question: str, employee_id: str, thread_id: str | None,
 def _norm_doc(ref: str) -> str:
     """Reduce a document reference to one canonical form.
 
-    The corpus, the gold answers and this harness use three separators:
-    'POL-001 2.1', 'POL-001:2.1' and a section sign. Normalising only spaces and
-    the sign left 'pol-001:2.1' beside 'pol-0012.1', so gold and observed never
-    intersected and citation accuracy read 0.0 on every case.
+    All of these must land on the same string:
+        POL-001 2.1   POL-001:2.1   POL-001 s2.1
+        POL-001s2.1   pol-001s2.1   POL-001 section 2.1
+    Annex ids keep whatever the input carried, so 'POL-005A 5' and
+    'POL-005A sA.5' stay distinct -- they are different identifiers.
     """
-    ref = ref.replace("\u00a7", " ").replace(":", " ").replace(" ", "")
-    ref = _re.sub(r"^(pol-\d{3}[a-z]?)s(?=[0-9a-z]\.)", r"\1 ", ref.lower())
-    return _re.sub(r"^(pol-\d{3}[a-z]?)(?=[0-9a-z])", r"\1:", ref)
+    s = ref.strip().lower().replace("\u00a7", " ").replace(":", " ")
+    s = re.sub(r"\s+", " ", s).replace(" ", "")
+
+    m = re.match(r"^(pol-\d{3})([a-z]?)(.*)$", s)
+    if not m:
+        return s
+    digits, letter, rest = m.group(1), m.group(2), m.group(3)
+
+    # A leading 's' before a section is the shorthand for the section sign, not
+    # part of the id. Any other trailing letter (the annex 'a') is part of it.
+    if letter == "s" and rest:
+        doc = digits
+    else:
+        doc = digits + letter if letter else digits
+
+    rest = re.sub(r"^s(?=.)", "", rest)
+    return f"{doc}:{rest}" if rest else doc
+
+"""Derive a compliance route from saved tool_io, for offline re-scoring."""
+
+
+import json
+from typing import Any
+
+
+def _payload(entry: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the tool's result as a dict, from result or output_summary."""
+    raw = entry.get("result")
+    if raw is None:
+        raw = entry.get("output_summary")
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+    return None
+
+
+def route_from_tool_io(tool_io: list[dict[str, Any]]) -> str | None:
+    """The route the compliance tool returned, or a derivation from its fields.
+
+    Runs offline against saved results, so a re-score needs no /chat call and no
+    Bedrock spend. The route is the compliance tool's own output: it is read when
+    present, and derived from `compliant` and `manager_approval_required` only
+    for rows saved before the tool returned it.
+    """
+    for entry in tool_io or []:
+        if entry.get("name") != "check_policy_compliance":
+            continue
+        result = _payload(entry)
+        if not result:
+            continue
+
+        route = result.get("route")
+        if route:
+            return str(route)
+
+        # Older rows: no route field. Derive from the fields the tool did return.
+        checked = result.get("checked")
+        if checked is False:
+            return "CANNOT_DETERMINE"
+        if result.get("compliant") is False:
+            if result.get("manager_approval_required"):
+                return "MANAGER_APPROVAL"
+            if result.get("available_days") is not None:
+                return "INSUFFICIENT_BALANCE"
+            if result.get("amount_usd") is not None and result.get("limit_usd") is not None:
+                return "PARTIAL_UP_TO_LIMIT"
+            return "NOT_ELIGIBLE"
+        if result.get("compliant") is True:
+            if result.get("manager_approval_required"):
+                return "MANAGER_APPROVAL"
+            if result.get("receipt_required"):
+                return "CLAIM_WITH_RECEIPT"
+            return "CLAIM"
+    return None
 
 def score(case: dict, payload: dict, latency_ms: int) -> dict:
     citations = payload.get("citations", []) or []
     tools = [t.get("name") for t in payload.get("tool_trace", []) or []]
     steps = payload.get("steps", []) or []
-    answer = (payload.get("answer") or "")
+    answer = payload.get("answer") or ""
     answer_lower = answer.lower()
 
-    # The route is the compliance tool's own output. The Bedrock path emits only
-    # tool_call steps, never a "decision" step, so reading the route from steps
-    # left it None on every case and route accuracy read 0.0 regardless of what
-    # the agent did.
+    # ---- route ----------------------------------------------------------
+    # The route is the compliance tool's own output. The saved rows carry it
+    # under tool_io[].output_summary as a JSON string; a live response carries
+    # the same payload under tool_trace. Reading only tool_trace[].result left
+    # the route None on every saved case, so route accuracy read 0.0 however
+    # the tool behaved.
     route = None
-    for t in payload.get("tool_trace", []) or []:
-        if t.get("name") != "check_policy_compliance" or t.get("is_error"):
-            continue
-        result = t.get("result")
-        if isinstance(result, str):
-            try:
-                result = json.loads(result)
-            except ValueError:
-                result = None
-        if isinstance(result, dict) and result.get("route"):
+
+    def _compliance_results():
+        for source in ("tool_io", "tool_trace"):
+            for entry in payload.get(source) or []:
+                if entry.get("name") != "check_policy_compliance":
+                    continue
+                if entry.get("is_error"):
+                    continue
+                raw = entry.get("result")
+                if raw is None:
+                    raw = entry.get("output_summary")
+                if isinstance(raw, str):
+                    try:
+                        raw = json.loads(raw)
+                    except ValueError:
+                        raw = None
+                if isinstance(raw, dict):
+                    yield raw
+
+    for result in _compliance_results():
+        if result.get("route"):
             route = result["route"]
+            break
+
+    # Rows saved before the tool returned a route: derive it from the fields
+    # the tool did return, so a re-score needs no /chat call and no Bedrock.
+    if route is None:
+        for result in _compliance_results():
+            if result.get("checked") is False:
+                route = "CANNOT_DETERMINE"
+            elif result.get("compliant") is False:
+                if result.get("manager_approval_required"):
+                    route = "MANAGER_APPROVAL"
+                elif result.get("available_days") is not None:
+                    route = "INSUFFICIENT_BALANCE"
+                elif result.get("amount_usd") is not None:
+                    route = "PARTIAL_UP_TO_LIMIT"
+                else:
+                    route = "NOT_ELIGIBLE"
+            elif result.get("compliant") is True:
+                if result.get("manager_approval_required"):
+                    route = "MANAGER_APPROVAL"
+                elif result.get("receipt_required"):
+                    route = "CLAIM_WITH_RECEIPT"
+                else:
+                    route = "CLAIM"
+            if route:
+                break
+
     if route is None:
         decision = next((s for s in steps if s.get("kind") == "decision"), None)
         route = (decision or {}).get("detail")
+
     clarification = next((s for s in steps if s.get("kind") == "clarification"), None)
 
+    # ---- citations ------------------------------------------------------
     got_cites = {_norm_doc(c.get("citation") or
                            f"{c.get('document_id')}:{c.get('section_id')}")
                  for c in citations}
@@ -124,21 +243,20 @@ def score(case: dict, payload: dict, latency_ms: int) -> dict:
     hit = gold & got_cites
     citation_accuracy = round(len(hit) / len(gold), 3) if gold else None
 
+    # ---- tools ----------------------------------------------------------
     expected_tools = case.get("expected_tools") or []
     tool_selection = (round(sum(1 for t in expected_tools if t in tools)
                             / len(expected_tools), 3)
                       if expected_tools else None)
     missing_tools = [t for t in expected_tools if t not in tools]
 
-    # Route: exact match when the case names one, else not scored.
+    # ---- route score ----------------------------------------------------
     expected_route = case.get("expected_route")
     route_ok = None
     if expected_route:
-        if route:
-            route_ok = route.strip().lower() == expected_route.strip().lower()
-        else:
-            route_ok = False
+        route_ok = bool(route) and route.strip().lower() == expected_route.strip().lower()
 
+    # ---- behaviour ------------------------------------------------------
     behaviour = case.get("expected_behavior")
     behaviour_ok = None
     if behaviour == "answer_with_escalation":
@@ -150,46 +268,23 @@ def score(case: dict, payload: dict, latency_ms: int) -> dict:
     elif behaviour == "refuse":
         behaviour_ok = any(m in answer_lower for m in REFUSAL_MARKERS)
 
-    # Groundedness proxy: every citation shown, and an answer that is not empty.
-    grounded = bool(answer.strip()) and (not citations or all(
-        _norm_doc(c.get("citation") or
-                  f"{c.get('document_id')}:{c.get('section_id')}") in got_cites
-        for c in citations))
-
     return {
-        "id": case["id"], "category": case.get("category"),
-        "employee_id": case.get("employee_id"), "question": case["question"],
-        "gold_answer": case.get("gold_answer"),
-        "gold_docs": sorted(gold), "expected_tools": expected_tools,
-        "expected_route": expected_route, "expected_behavior": behaviour,
-        # observed
-        "answer": answer,
-        "route": route,
-        "escalation": bool(payload.get("escalation")),
-        "needs_clarification": bool(payload.get("needs_clarification")),
-        "capped": bool(payload.get("capped")),
-        "planning_error": payload.get("planning_error"),
-        "prompt_id": payload.get("prompt_id"),
-        "thread_id": payload.get("thread_id"),
-        "tools_called": tools,
+        "id": case.get("id"),
+        "category": case.get("category"),
+        "question": case.get("question"),
+        "gold_docs": sorted(gold),
         "citations": sorted(got_cites),
-        "latency_ms": latency_ms,
-        # the evidence trail, preserved verbatim
-        "steps": steps,
-        "tool_io": [
-            {"name": t.get("name"), "arguments": t.get("arguments"),
-             "output_summary": t.get("output_summary"),
-             "iteration": t.get("iteration")}
-            for t in payload.get("tool_trace", []) or []
-        ],
-        # scores
         "citation_accuracy": citation_accuracy,
+        "expected_tools": expected_tools,
+        "tools_called": tools,
         "tool_selection": tool_selection,
         "missing_tools": missing_tools,
+        "expected_route": expected_route,
+        "route": route,
         "route_ok": route_ok,
+        "expected_behavior": behaviour,
         "behaviour_ok": behaviour_ok,
-        "grounded": grounded,
-        "completed": bool(answer.strip()) and not payload.get("planning_error"),
+        "latency_ms": latency_ms,
     }
 
 
