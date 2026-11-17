@@ -454,11 +454,37 @@ agent returned `CANNOT_DETERMINE`; for a $500 laptop and a $600 chair it returne
 carryover-style cap, the agent's routes are defensible and the gold answers need
 review rather than the code.
 
-### What is not measured
+### Ablation: retrieval similarity floor and k
 
-- **No ablation.** The cleanest available comparison is `QUANTIC_MIN_SIMILARITY`
-  0.2 against 0.35, now that one variable governs both retrieval and display, or
-  keyword against vector retrieval.
+Retrieval-only, over the 22 eval cases that name gold documents. Each configuration
+calls the same `search_policy_documents` path the MCP tool exposes, against the live
+Aurora corpus, so the comparison reflects the deployed retriever rather than a
+reimplementation. Results: `evaluation/results/ablation.json`.
+
+| Threshold | k | Doc recall | Abstain rate | p50 ms |
+|---|---|---|---|---|
+| 0.20 (deployed) | 5 | 0.977 | 0.000 | 2817 |
+| 0.35 | 5 | 0.705 | 0.136 | 2664 |
+| 0.20 | 3 | 0.909 | 0.000 | 2539 |
+| 0.20 | 8 | 0.977 | 0.000 | 2430 |
+
+Two findings. First, the similarity floor is the effective lever: raising it from
+0.20 to 0.35 costs 27 points of gold-document recall and raises retrieval-level
+abstention from 0% to 13.6%, with no latency benefit. The deployed value of 0.20
+deliberately favours recall. Second, k is saturated at 5: k=8 retrieves the same
+gold documents as k=5 (0.977) while adding context to the prompt, and k=3 loses
+7 points (0.909).
+
+**Scope note.** This run sets `QUANTIC_MIN_SIMILARITY=0` so every candidate is
+collected and each floor is applied in the harness, which is why the three 0.20 rows
+show 0.0 abstention: the floor was not the filter in those rows. The 0.35 row applies
+its floor directly and is the one that shows what a stricter threshold does to
+abstention. Abstention at the retrieval layer is therefore not the mechanism that
+handles out-of-corpus questions; the agent's abstain guardrail is, and that is scored
+separately in the behaviour metrics above.
+
+
+### What is not measured
 - **No cold-versus-warm split.** The figures above are warm only.
 - **No labelled groundedness judge.** The harness reports a proxy — an answer
   exists and every citation was retrieved in the same run.
@@ -574,7 +600,7 @@ documents how to run them locally against a seeded Postgres.
 
 | Item | Status |
 |---|---|
-| Evaluation ablation | Not produced |
+| Evaluation ablation | Produced — retrieval floor and k, table in section 9 |
 | p50/p95 split cold vs warm | Not produced |
 | Labelled groundedness score | Not produced — proxy only |
 | Cross-reference sections in retrieval | Known limitation, mitigation identified |
