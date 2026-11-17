@@ -397,6 +397,21 @@ An AWS Budget alert caps the exposure.
 
 ## 8. Evaluation
 
+<!-- BEGIN METRICS -->
+_Measured on the deployed service. Source: [`evaluation/results/summary.md`](evaluation/results/summary.md), generated 2026-11-17._
+
+| Metric | Value |
+| --- | --- |
+| Citation accuracy | 0.386 |
+| Tool selection accuracy | 0.932 |
+| Route accuracy | 0.625 |
+| Workflow completion rate | 1.0 |
+| Behaviour accuracy | 0.767 |
+| Latency p50 | 13665 ms |
+| Latency p95 | 15358 ms |
+
+<!-- END METRICS -->
+
 ### Method
 
 30 gold cases in `evaluation/eval_set.jsonl`, each carrying a `gold_answer`,
