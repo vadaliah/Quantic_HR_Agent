@@ -165,7 +165,7 @@ def route_from_tool_io(tool_io: list[dict[str, Any]]) -> str | None:
             return "CLAIM"
     return None
 
-def score(case: dict, payload: dict, latency_ms: int) -> dict:
+def score(case: dict, payload: dict, latency_ms: int,) -> dict:
     citations = payload.get("citations", []) or []
     tools = [t.get("name") for t in payload.get("tool_trace", []) or []]
     steps = payload.get("steps", []) or []
@@ -272,6 +272,7 @@ def score(case: dict, payload: dict, latency_ms: int) -> dict:
         "id": case.get("id"),
         "category": case.get("category"),
         "question": case.get("question"),
+        "employee_id": case.get("employee_id"),
         "gold_docs": sorted(gold),
         "citations": sorted(got_cites),
         "citation_accuracy": citation_accuracy,
@@ -284,9 +285,14 @@ def score(case: dict, payload: dict, latency_ms: int) -> dict:
         "route_ok": route_ok,
         "expected_behavior": behaviour,
         "behaviour_ok": behaviour_ok,
+        "escalation": bool(payload.get("escalation")),
+        "needs_clarification": bool(payload.get("needs_clarification") or clarification),
+        "planning_error": payload.get("planning_error"),
+        "steps": steps,
+        "completed": not bool(payload.get("capped")),
+        "capped": bool(payload.get("capped")),
         "latency_ms": latency_ms,
     }
-
 
 def pct(values: list[int], p: float) -> int | None:
     if not values:
@@ -305,7 +311,7 @@ def aggregate(rows: list[dict]) -> dict:
         vals = [bool(r[key]) for r in rows if r.get(key) is not None]
         return round(sum(vals) / len(vals), 3) if vals else None
 
-    lat = [r["latency_ms"] for r in rows if r.get("latency_ms") is not None]
+    lat = [r.get("latency_ms") for r in rows if r.get("latency_ms") is not None]
     by_cat: dict[str, list[dict]] = {}
     for r in rows:
         by_cat.setdefault(r.get("category") or "uncategorised", []).append(r)
@@ -318,9 +324,9 @@ def aggregate(rows: list[dict]) -> dict:
         "workflow_completion_rate": rate("completed"),
         "behaviour_accuracy": rate("behaviour_ok"),
         "groundedness": rate("grounded"),
-        "escalations": sum(1 for r in rows if r["escalation"]),
-        "capped_runs": sum(1 for r in rows if r["capped"]),
-        "planning_errors": sum(1 for r in rows if r["planning_error"]),
+        "escalations": sum(1 for r in rows if r.get("escalation")),
+        "capped_runs": sum(1 for r in rows if r.get("capped")),
+        "planning_errors": sum(1 for r in rows if r.get("planning_error")),
         "latency_p50_ms": pct(lat, 50), "latency_p95_ms": pct(lat, 95),
         "latency_min_ms": min(lat) if lat else None,
         "latency_max_ms": max(lat) if lat else None,
@@ -345,24 +351,23 @@ def aggregate(rows: list[dict]) -> dict:
 
 def write_transcript(row: dict) -> Path:
     path = TRANSCRIPTS / f"{row['id']}.md"
+    g = lambda k, d="—": row.get(k, d)  # noqa: E731
     lines = [
-        f"# {row['id']} — {row['category']}",
+        f"# {row['id']} — {g('category')}",
         "",
-        f"**Employee:** {row['employee_id']}  ",
-        f"**Question:** {row['question']}",
+        f"**Employee:** {g('employee_id')}  ",
+        f"**Question:** {g('question')}",
         "",
-        f"**Expected route:** `{row['expected_route']}` · "
-        f"**observed:** `{row['route']}`",
-        f"**Expected tools:** {row['expected_tools']}  ",
-        f"**Tools called:** {row['tools_called']}",
-        f"**Gold docs:** {row['gold_docs']}  ",
-        f"**Citations:** {row['citations']}",
-        f"**Citation accuracy:** {row['citation_accuracy']} · "
-        f"**latency:** {row['latency_ms']} ms · **prompt_id:** {row['prompt_id']}",
-        "",
+        f"**Expected route:** `{g('expected_route')}` · "
+        f"**observed:** `{g('route')}`",
+        f"**Expected tools:** {g('expected_tools')}  ",
+        f"**Tools called:** {g('tools_called')}",
+        f"**Gold docs:** {g('gold_docs')}  ",
+        f"**Citations:** {g('citations')}",
+        f"**Citation accuracy:** {g('citation_accuracy')} · ",
     ]
     if row.get("planning_error"):
-        lines += ["**Planning error:**", "", f"```\n{row['planning_error']}\n```", ""]
+        lines += ["**Planning error:**", "", f"```\n{row.get('planning_error')}\n```", ""]
 
     lines += ["## Decision path", ""]
     for i, step in enumerate(row.get("steps") or [], 1):
@@ -413,11 +418,11 @@ def write_summary(rows: list[dict], summary: dict) -> Path:
     for r in rows:
         problems = []
         if r.get("route_ok") is False:
-            problems.append(f"route expected `{r['expected_route']}`, got `{r['route']}`")
+            problems.append(f"route expected `{r.get("expected_route")}`, got `{r.get("route")}`")
         if r.get("behaviour_ok") is False:
-            problems.append(f"behaviour expected `{r['expected_behavior']}`")
+            problems.append(f"behaviour expected `{r.get("expected_behavior")}`")
         if r.get("missing_tools"):
-            problems.append(f"missing tools {r['missing_tools']}")
+            problems.append(f"missing tools {r.get("missing_tools")}")
         if r.get("citation_accuracy") == 0:
             problems.append("no gold document cited")
         if r.get("planning_error"):
@@ -427,9 +432,9 @@ def write_summary(rows: list[dict], summary: dict) -> Path:
 
     lines += ["", "## Per-question", ""]
     for r in rows:
-        lines.append(f"- {r['id']} [{r['category']}] route=`{r['route']}` "
-                     f"cite={r['citation_accuracy']} tools={len(r['tools_called'])} "
-                     f"{r['latency_ms']}ms")
+        lines.append(f"- {r['id']} [{r.get("category")}] route=`{r.get("route")}` "
+                     f"cite={r.get("citation_accuracy")} tools={len(r.get("tools_called"))} "
+                     f"{r.get("latency_ms")}ms")
     path.write_text("\n".join(lines) + "\n")
     return path
 
@@ -539,19 +544,22 @@ def main() -> int:
             continue
 
         row = score(case, payload, latency)
+        row.setdefault("employee_id", case.get("employee_id"))
+        row.setdefault("category", case.get("category"))
+        row.setdefault("question", case.get("question"))
         rows.append(row)
         write_transcript(row)
 
         verdict = "ok"
-        if not row["behaviour_ok"] and row["behaviour_ok"] is not None:
+        if not row.get("behaviour_ok") and row.get("behaviour_ok") is not None:
             verdict = "BEHAVIOUR"
-        elif row["route_ok"] is False:
+        elif row.get("route_ok") is False:
             verdict = "ROUTE"
         elif row["citation_accuracy"] == 0:
             verdict = "CITE"
-        elif row["planning_error"]:
+        elif row.get("planning_error"):
             verdict = "ERROR"
-        print(f" {verdict:10} route={row['route']} cite={row['citation_accuracy']} "
+        print(f" {verdict:10} route={row.get("route")} cite={row.get("citation_accuracy")} "
               f"{latency}ms")
 
     with (RESULTS / "results.jsonl").open("w") as handle:

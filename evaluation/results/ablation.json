@@ -1,0 +1,34 @@
+[
+  {
+    "threshold": 0.2,
+    "k": 5,
+    "cases": 22,
+    "doc_recall": 0.977,
+    "abstain_rate": 0.0,
+    "p50_ms": 2817
+  },
+  {
+    "threshold": 0.35,
+    "k": 5,
+    "cases": 22,
+    "doc_recall": 0.705,
+    "abstain_rate": 0.136,
+    "p50_ms": 2664
+  },
+  {
+    "threshold": 0.2,
+    "k": 3,
+    "cases": 22,
+    "doc_recall": 0.909,
+    "abstain_rate": 0.0,
+    "p50_ms": 2539
+  },
+  {
+    "threshold": 0.2,
+    "k": 8,
+    "cases": 22,
+    "doc_recall": 0.977,
+    "abstain_rate": 0.0,
+    "p50_ms": 2430
+  }
+]
