@@ -360,6 +360,10 @@ def _verdict(
         "check_type": check_type,
         "checked": checked,
         "compliant": compliant,
+        # The route is the decision the caller acts on: what happens next, not
+        # just whether the request passes. It is always one of ROUTES, it is
+        # always present even when the check could not run, and the evaluation
+        # harness scores route accuracy from this field.
         "route": route,
         "reason": reason,
         **facts,
@@ -523,6 +527,23 @@ def _check_remote(profile: dict[str, Any], args: dict[str, Any]) -> dict[str, An
 
 CHECKS = {"expense": _check_expense, "pto": _check_pto, "remote_work": _check_remote}
 
+# The route vocabulary, in one place. The evaluation harness reads `route` from
+# the tool result to score route accuracy, and the MCP docstring lists the same
+# values so the model cannot invent one. Before this, the trace carried no route
+# field at all and route accuracy read 0.0 however the tool behaved.
+ROUTES = (
+    "SELF_SERVICE",                  # within the employee's own control
+    "MANAGER_APPROVAL",              # manager must approve first
+    "PEOPLE_OPS_AND_LEGAL_APPROVAL", # cross-border work beyond the threshold
+    "NEEDS_PRE_APPROVAL",            # expense above the pre-approval threshold
+    "PARTIAL_UP_TO_LIMIT",           # expense above a category limit
+    "CLAIM",                         # reimbursement below the receipt threshold
+    "CLAIM_WITH_RECEIPT",            # reimbursement above the receipt threshold
+    "INSUFFICIENT_BALANCE",          # PTO request exceeds the balance
+    "NOT_ELIGIBLE",                  # employment type or role rules the request out
+    "CANNOT_DETERMINE",              # the check could not be run
+)
+
 
 def check_policy_compliance(
     employee_id: str,
@@ -591,3 +612,8 @@ def draft_hr_email(employee_id: str, topic: str, body_points: list[str] | None =
         + "\n\nThis is a mock draft only. No email was sent.\n"
     )
     return {"draft": draft, "sent": False, "employee_id": employee_id}
+
+
+def routes() -> tuple[str, ...]:
+    """The route vocabulary, for callers that need to validate a value."""
+    return ROUTES

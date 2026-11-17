@@ -28,7 +28,7 @@ Smoke evidence (verified 2026-11-12 ~00:58 CET, Europe/Berlin):
 
 Cold start (not a new chat measurement): a public `GET /health` on 15 Nov 2026 at 15:11 CET (Europe/Berlin) took 42.4 seconds and returned HTTP 200 with `runtime=data-api`, `database.ok` true, `mcp=stdio`, and `build=2026-11-15-abstain-fix`. That is consistent with a Render Free wake plus Aurora resume. This update did not call live `/chat`.
 
-Pending: AWS Budget alert.
+AWS Budget alert: configured at $10/month with an 80% threshold alert.
 
 In AWS today: `QuanticHrAgentStack` (Aurora Serverless v2 with live data, deletion protection
 on) created 2026-11-03. Do not run `cdk deploy` from this branch.

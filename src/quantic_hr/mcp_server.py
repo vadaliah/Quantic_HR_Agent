@@ -113,7 +113,11 @@ def check_policy_compliance(
 
     Returns:
         checked, compliant (true/false, or null when not checked), route, reason,
-        comparison (e.g. "400.00 <= 500.00"), and policy_document_id/policy_section_id.
+        comparison (e.g. "400.00 <= 500.00"), policy_document_id/policy_section_id,
+        and route -- one of SELF_SERVICE, MANAGER_APPROVAL,
+        PEOPLE_OPS_AND_LEGAL_APPROVAL, NEEDS_PRE_APPROVAL, PARTIAL_UP_TO_LIMIT,
+        CLAIM, CLAIM_WITH_RECEIPT, INSUFFICIENT_BALANCE, NOT_ELIGIBLE,
+        CANNOT_DETERMINE. Report the route exactly as returned.
     """
     return tools.check_policy_compliance(
         employee_id, check_type, days_requested, amount, expense_category,
