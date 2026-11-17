@@ -21,9 +21,9 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --group dev
-        
+
       - name: Tests
-        run: uv run pytest -q
+        run: uv run pytest -q -rs
 
       - name: Import check
         run: |
@@ -42,3 +42,15 @@ jobs:
           npm ci
           npm run build
         working-directory: frontend
+
+  # Deployment runs only if offline-checks passed, and only for a push to main.
+  # Render's own auto-deploy must be off (autoDeploy: false in render.yaml, or
+  # the Auto-Deploy toggle in the dashboard), otherwise Render can deploy a
+  # commit that CI never saw.
+  deploy:
+    needs: offline-checks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
