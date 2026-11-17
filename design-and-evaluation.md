@@ -331,7 +331,6 @@ than clarified or refused, which is the behaviour accuracy reported in section 8
 ---
 
 ## 7. Deployment
-
 **Render free web service**, region Ohio. One Docker image serves the API, the
 MCP server as a subprocess, and the built React UI.
 
@@ -373,6 +372,27 @@ record of the database stack. `cdk deploy` must not be run from this branch: a
 read-only `cdk diff` showed it would replace the DB subnets and the database
 security group.
 
+### Why paid AWS services, and what has to change to run free
+
+The brief prefers free options and allows "your own API keys". Two components
+deviate from a pure free-tier shape, and each has a stated escape hatch.
+
+**Bedrock (Nova Pro chat, Titan v2 embeddings)** is pay-per-token with no standing
+charge; a full 30-case evaluation run costs well under a dollar. Any
+OpenAI-compatible free tier is a drop-in change behind the same Converse-shaped
+client: only `CHAT_MODEL` and `EMBED_MODEL` change.
+
+**Aurora Serverless v2 with pgvector** was chosen to match the stack this build is
+made on — React against Postgres. It auto-pauses when idle, so cost is bounded to
+active minutes plus storage. The application runs unchanged on any free Postgres
+with pgvector by setting `DB_MODE=psycopg` and a `DATABASE_URL`; local development
+and CI already take that path.
+
+**Hosting** is the Render free tier. No paid hosting is required.
+
+An AWS Budget alert caps the exposure.
+
+
 ---
 
 ## 8. Evaluation
@@ -397,20 +417,16 @@ transcript per case. The dashboard at `/evaluation` reads `/evaluation/results`.
 ### Results
 
 Measured warm, on the deployed service, 16 November 2026.
-
 | Metric | Value |
 |---|---|
-| Citation accuracy | **0.409** |
-| Tool selection accuracy | **0.909** |
-| Route accuracy | **0.625** |
-| Workflow completion rate | **1.0** |
+| Citation accuracy | 0.386 |
+| Tool selection accuracy | 0.932 |
+| Route accuracy | 0.625 |
+| Workflow completion rate | 1.0 |
 | Behaviour accuracy | 0.767 |
-| Groundedness (proxy) | 1.0 |
-| Planning errors | 0 |
-| Escalations | 0 |
-| Capped runs | 0 |
-| Latency p50 | **13,611 ms** |
-| Latency p95 | 16,788 ms |
+| Latency p50 | 13665 ms |
+| Latency p95 | 15358 ms |
+
 
 By category:
 
@@ -423,7 +439,7 @@ By category:
 | out_of_scope | 4 | — | — | 0.250 |
 
 Workflow completion at 1.0 means no case hung, errored or exhausted its step
-budget. Tool selection at 0.909 means the expected tools were called in almost
+budget. Tool selection at 0.932 means the expected tools were called in almost
 every case.
 
 ### Latency
@@ -439,9 +455,13 @@ Aurora's resume.
 
 ### Limitations, with causes
 
-**Citation accuracy 0.409.** The dominant cause is retrieval preferring
-cross-reference sections over rule sections — `POL-020 §2` and `POL-009 §11`
-score 0.35–0.40 against almost any question. Mitigations are named in section 2.
+***Citation accuracy 0.386.** Scored at section granularity, the stricter measure.
+The loss concentrates in synthesis: `simple_policy` scores 0.625, while
+`multi_document` and `tool_requiring` score 0.286 and 0.214. Single-document
+questions cite the exact section; answers that combine sources cite the parent
+section or a sibling stating the same rule. The dominant cause remains retrieval
+preferring cross-reference sections over rule sections — `POL-020 §2` and
+`POL-009 §11` score 0.35–0.40 against almost any question.
 
 **Behaviour accuracy 0.767.** Six cases were answered rather than clarified or
 refused, because the pre-flight guardrails match a narrower set of phrasings than

@@ -14,3 +14,6 @@ __pycache__/
 frontend/dist/
 frontend/node_modules/
 .idea/
+
+# local run scripts and pid files
+.run/

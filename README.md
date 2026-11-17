@@ -230,6 +230,16 @@ citations in about 14 s. Still to do: the AWS Budget alert. Do not run `cdk depl
   smoke call, 2026-11-12); `CHAT_MODEL=us.anthropic.claude-sonnet-4-6` is the alternative.
 - **Teardown after grading:** delete the IAM access key (or user) and suspend or delete the
   Render service. The Aurora cluster is Hiren's and stays as is.
+## Evaluation
+
+```bash
+python evaluation/run_eval.py
+python evaluation/run_eval.py --rescore
+QUANTIC_AS_OF=2026-11-03 python -m evaluation.ablation
+```
+
+Results are written to `evaluation/results/`. Metrics and the ablation table are in
+[design-and-evaluation.md](design-and-evaluation.md).
 
 ## Docs
 - [Architecture views](docs/architecture/)
